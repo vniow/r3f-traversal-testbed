@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Vector3 } from "three";
 import { useThree, useFrame } from "@react-three/fiber";
 
@@ -11,14 +12,19 @@ export type ObjectWithVertices = {
 // Utility to get interpolated points between objects
 export function getInterpolatedPoints(objects: ObjectWithVertices[]) {
   const points: { position: [number, number, number], color: [number, number, number], key: string }[] = [];
-  for (let i = 0; i < objects.length - 1; i++) {
+  
+  // Interpolate between each consecutive pair, including wrapping back to the first
+  for (let i = 0; i < objects.length; i++) {
     const objA = objects[i];
-    const objB = objects[i + 1];
+    const objB = objects[(i + 1) % objects.length]; // Wrap around to first object
+    
+    // Use the actual last vertex to ensure complete traversal of the object
     const a = objA.points[objA.points.length - 1];
     const b = objB.points[0];
     const colorA = objA.colors[objA.colors.length - 1] || [1, 1, 1];
     const colorB = objB.colors[0] || [1, 1, 1];
     const numInterp = 15;
+    
     for (let j = 1; j <= numInterp; j++) {
       const t = j / (numInterp + 1);
       const interp = [
@@ -35,6 +41,67 @@ export function getInterpolatedPoints(objects: ObjectWithVertices[]) {
     }
   }
   return points;
+}
+
+/**
+ * A hook that traverses a series of objects and their interpolated paths,
+ * and returns the complete vertex data in six separate buffers.
+ * The traversal order is: Object -> Interpolation -> Next Object -> ...
+ */
+export function useVertexTraversal(objects: ObjectWithVertices[]) {
+  const [buffers, setBuffers] = useState<{
+    x: number[];
+    y: number[];
+    z: number[];
+    r: number[];
+    g: number[];
+    b: number[];
+  }>({ x: [], y: [], z: [], r: [], g: [], b: [] });
+
+  useFrame(() => {
+    const newX: number[] = [];
+    const newY: number[] = [];
+    const newZ: number[] = [];
+    const newR: number[] = [];
+    const newG: number[] = [];
+    const newB: number[] = [];
+
+    if (objects.length === 0) {
+      setBuffers({ x: newX, y: newY, z: newZ, r: newR, g: newG, b: newB });
+      return;
+    }
+
+    // The main traversal loop
+    for (let i = 0; i < objects.length; i++) {
+      const currentObject = objects[i];
+
+      // 1. Add all vertices from the current object to the buffers
+      currentObject.points.forEach((p, j) => {
+        const color = currentObject.colors[j] || [1, 1, 1];
+        newX.push(p[0]);
+        newY.push(p[1]);
+        newZ.push(p[2]);
+        newR.push(color[0]);
+        newG.push(color[1]);
+        newB.push(color[2]);
+      });
+
+      // 2. Add the interpolated points between the current and next object
+      const interpolated = getInterpolatedPoints([currentObject, objects[(i + 1) % objects.length]]);
+      interpolated.forEach(pt => {
+        newX.push(pt.position[0]);
+        newY.push(pt.position[1]);
+        newZ.push(pt.position[2]);
+        newR.push(pt.color[0]);
+        newG.push(pt.color[1]);
+        newB.push(pt.color[2]);
+      });
+    }
+
+    setBuffers({ x: newX, y: newY, z: newZ, r: newR, g: newG, b: newB });
+  });
+
+  return buffers;
 }
 
 // Utility to log world and screen coordinates for each vertex of each object, on every frame
@@ -67,7 +134,7 @@ export function useLogVertices(objects: ObjectWithVertices[]) {
       obj.points.forEach((p, i) => {
         const color = obj.colors[i] || [1, 1, 1];
         const info = getVertexInfo(obj.name, i, p, color);
-        console.log(info);
+        // console.log(info);
       });
     });
 
@@ -75,7 +142,7 @@ export function useLogVertices(objects: ObjectWithVertices[]) {
     const interpPoints = getInterpolatedPoints(objects);
     interpPoints.forEach((pt, i) => {
       const info = getVertexInfo("interp", i, pt.position, pt.color, "interp");
-      console.log(info);
+    //   console.log(info);
     });
   });
 }

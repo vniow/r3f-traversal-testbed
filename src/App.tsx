@@ -6,42 +6,30 @@ import Square from "./Components/Square";
 import { useLogVertices } from "./Components/vertexUtils";
 import { InterpolatedPoints } from "./Components/useLogVertices";
 import type { ObjectWithVertices } from "./Components/vertexUtils";
+import Polygon from "./Components/Polygon";
+import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
+import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
+import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import Lights from "./Components/Lights";
 
 
 
 const objects: ObjectWithVertices[] = [
   {
-    name: "Square",
-    points: [
-      [-1.5, -0.5, 0],
-      [-0.5, -0.5, 0],
-      [-0.5, 0.5, 0],
-      [-1.5, 0.5, 0],
-      [-1.5, -0.5, 0],
-    ],
-    colors: [
-      [1, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-      [1, 0, 0],
-      [1, 0, 0],
-    ],
+    name: "Triangle",
+    points: TRIANGLE_POINTS,
+    colors: TRIANGLE_COLORS,
   },
   {
-    name: "Triangle",
-    points: [
-      [0, 0, 0],
-      [1, 0, 0],
-      [0.5, 1, 0],
-      [0, 0, 0],
-    ],
-    colors: [
-      [1, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-      [1, 0, 0],
-    ],
+    name: "Square",
+    points: SQUARE_POINTS,
+    colors: SQUARE_COLORS,
+  },
+
+  {
+    name: "Polygon",
+    points: POLYGON_POINTS,
+    colors: POLYGON_COLORS,
   },
 ];
 
@@ -52,6 +40,7 @@ function SceneWithLogging() {
       <Lights />
       <Square />
       <Triangle />
+      <Polygon />
       <InterpolatedPoints objects={objects} />
       <OrbitControls />
     </>
