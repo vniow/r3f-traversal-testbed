@@ -1,11 +1,14 @@
 import "./App.css";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, OrthographicCamera } from "@react-three/drei";
 import Triangle from "./Components/Triangle";
 import Square from "./Components/Square";
-import { useLogVertices } from "./Components/vertexUtils";
+import { useLogVertices } from "./vertexUtils";
 import { InterpolatedPoints } from "./Components/useLogVertices";
-import type { ObjectWithVertices } from "./Components/vertexUtils";
+import type { ObjectWithVertices, VertexData } from "./vertexUtils";
+import { useRef, useState } from "react";
+import { VertexDataPlot } from "./Components/VertexDataPlot";
+import type { VertexDatum } from "./Components/VertexDataPlot";
 import Lights from "./Components/Lights";
 
 
@@ -45,8 +48,13 @@ const objects: ObjectWithVertices[] = [
   },
 ];
 
-function SceneWithLogging() {
-  useLogVertices(objects);
+
+function SceneWithLogging({ onVertexData }: { onVertexData: (data: VertexData[]) => void }) {
+  const { camera } = useThree();
+  
+  // Custom hook to collect and forward vertex data
+  useLogVertices(objects, camera, onVertexData);
+  
   return (
     <>
       <Lights />
@@ -58,12 +66,40 @@ function SceneWithLogging() {
   );
 }
 
+
 function App() {
+  const [vertexData, setVertexData] = useState<VertexDatum[]>([]);
+  const tRef = useRef(0);
+
+  // Handler to collect vertex data from the scene
+  const handleVertexData = (data: VertexData[]) => {
+    tRef.current += 1;
+    
+    // Convert each VertexData to VertexDatum by adding time
+    const newData = data.map(vertex => ({
+      t: tRef.current,
+      x: vertex.x,
+      y: vertex.y,
+      z: vertex.z,
+      r: vertex.r,
+      g: vertex.g,
+      b: vertex.b,
+    }));
+    
+    setVertexData(prev => [
+      ...prev.slice(-199), // keep last 200
+      ...newData
+    ]);
+  };
+
   return (
     <>
+      <div style={{ width: "100vw", background: "#181818", padding: 16 }}>
+        <VertexDataPlot data={vertexData} />
+      </div>
       <Canvas>
         <OrthographicCamera makeDefault position={[0, 5, 5]} zoom={50} />
-        <SceneWithLogging />
+        <SceneWithLogging onVertexData={handleVertexData} />
       </Canvas>
     </>
   );

@@ -1,15 +1,18 @@
 import { Sphere } from "@react-three/drei";
-import { getInterpolatedPoints } from "./vertexUtils";
-import type { ObjectWithVertices } from "./vertexUtils";
+import { getInterpolatedPoints } from "../vertexUtils";
+import type { ObjectWithVertices } from "../vertexUtils";
 
 // Component to render interpolated points as spheres
 export function InterpolatedPoints({ objects }: { objects: ObjectWithVertices[] }) {
-  const interpPoints = getInterpolatedPoints(objects);
+  if (objects.length < 2) return null;
+  
+  const interpPoints = getInterpolatedPoints(objects[0], objects[1]);
+  
   return (
     <>
-      {interpPoints.map(pt => (
-        <Sphere key={pt.key} args={[0.05, 16, 16]} position={pt.position}>
-          <meshBasicMaterial attach="material" color={`rgb(${pt.color[0]*255},${pt.color[1]*255},${pt.color[2]*255})`} />
+      {interpPoints.map((point, index) => (
+        <Sphere key={`interp-${index}`} args={[0.01, 8, 8]} position={point}>
+          <meshBasicMaterial attach="material" color="yellow" />
         </Sphere>
       ))}
     </>
