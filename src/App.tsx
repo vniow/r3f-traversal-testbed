@@ -1,18 +1,13 @@
 import "./App.css";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, OrthographicCamera } from "@react-three/drei";
-import Triangle from "./Components/Triangle";
-import Square from "./Components/Square";
-import { useLogVertices } from "./Components/vertexUtils";
-import { InterpolatedPoints } from "./Components/useLogVertices";
+import { View } from "@react-three/drei";
 import type { ObjectWithVertices } from "./Components/vertexUtils";
-import Polygon from "./Components/Polygon";
 import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
 import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
 import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
-import Lights from "./Components/Lights";
-
-
+import Debug from "./Components/Debug";
+import { useState } from "react";
+import { SceneView } from "./Components/SceneView";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -33,26 +28,42 @@ const objects: ObjectWithVertices[] = [
   },
 ];
 
-function SceneWithLogging() {
-  useLogVertices(objects);
-  return (
-    <>
-      <Lights />
-      <Square />
-      <Triangle />
-      <Polygon />
-      <InterpolatedPoints objects={objects} />
-      <OrbitControls />
-    </>
-  );
-}
-
 function App() {
+  const [vertexData, setVertexData] = useState<{
+    screenX: number[];
+    screenY: number[];
+    screenZ: number[];
+    r: number[];
+    g: number[];
+    b: number[];
+  }>({
+    screenX: [],
+    screenY: [],
+    screenZ: [],
+    r: [],
+    g: [],
+    b: [],
+  });
+
   return (
     <>
-      <Canvas>
-        <OrthographicCamera makeDefault position={[0, 5, 5]} zoom={50} />
-        <SceneWithLogging />
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", width: "100%", height: "100vh" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Debug vertexData={vertexData} />
+        </div>
+        <div
+          style={{
+            width: 512,
+            minWidth: 256,
+            height: 512,
+            marginLeft: 24,
+          }}
+        >
+          <SceneView objects={objects} setVertexData={setVertexData} />
+        </div>
+      </div>
+      <Canvas style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+        <View.Port />
       </Canvas>
     </>
   );

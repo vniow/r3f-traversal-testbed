@@ -11,27 +11,25 @@ export type ObjectWithVertices = {
 
 // Utility to get interpolated points between objects
 export function getInterpolatedPoints(objects: ObjectWithVertices[]) {
-  const points: { position: [number, number, number], color: [number, number, number], key: string }[] = [];
-  
+  const points: { position: [number, number, number]; color: [number, number, number]; key: string }[] = [];
+
   // Interpolate between each consecutive pair, including wrapping back to the first
   for (let i = 0; i < objects.length; i++) {
     const objA = objects[i];
     const objB = objects[(i + 1) % objects.length]; // Wrap around to first object
-    
+
     // Use the actual last vertex to ensure complete traversal of the object
     const a = objA.points[objA.points.length - 1];
     const b = objB.points[0];
     const colorA = objA.colors[objA.colors.length - 1] || [1, 1, 1];
     const colorB = objB.colors[0] || [1, 1, 1];
     const numInterp = 15;
-    
+
     for (let j = 1; j <= numInterp; j++) {
       const t = j / (numInterp + 1);
-      const interp = [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-      ] as [number, number, number];
+      const interp = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t] as [number, number, number];
+      // Set z=1 for interpolated points only
+      interp[2] = 1;
       const interpColor = [
         colorA[0] + (colorB[0] - colorA[0]) * t,
         colorA[1] + (colorB[1] - colorA[1]) * t,
@@ -68,6 +66,7 @@ export function useVertexTraversal(objects: ObjectWithVertices[]) {
 
     if (objects.length === 0) {
       setBuffers({ x: newX, y: newY, z: newZ, r: newR, g: newG, b: newB });
+
       return;
     }
 
@@ -85,6 +84,7 @@ export function useVertexTraversal(objects: ObjectWithVertices[]) {
         newG.push(color[1]);
         newB.push(color[2]);
       });
+      console.log(`Traversing object: ${currentObject.name} with ${currentObject.points.length} vertices`);
 
       // 2. Add the interpolated points between the current and next object
       const interpolated = getInterpolatedPoints([currentObject, objects[(i + 1) % objects.length]]);
@@ -124,7 +124,7 @@ export function useLogVertices(objects: ObjectWithVertices[]) {
       r: color[0],
       g: color[1],
       b: color[2],
-      screen: { x: projected.x, y: projected.y }
+      screen: { x: projected.x, y: projected.y },
     };
   }
 
@@ -142,7 +142,7 @@ export function useLogVertices(objects: ObjectWithVertices[]) {
     const interpPoints = getInterpolatedPoints(objects);
     interpPoints.forEach((pt, i) => {
       const info = getVertexInfo("interp", i, pt.position, pt.color, "interp");
-    //   console.log(info);
+      //   console.log(info);
     });
   });
 }
