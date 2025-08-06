@@ -7,12 +7,20 @@ export function VertexScreenXCollector({
   setVertexData,
 }: {
   objects: ObjectWithVertices[];
-  setVertexData: (data: { screenX: number[]; screenY: number[]; screenZ: number[]; r: number[]; g: number[]; b: number[] }) => void;
+  setVertexData: (data: {
+    screenX: number[];
+    screenY: number[];
+    screenZ: number[];
+    r: number[];
+    g: number[];
+    b: number[];
+    source: ("object" | "interpolated")[];
+  }) => void;
 }) {
   const { camera } = useThree();
 
   useFrame(() => {
-    const data = collectVertexScreenData(objects, camera);
+    const { data, source } = collectVertexScreenData(objects, camera);
 
     // Extract all values into separate arrays
     const vertexData = {
@@ -22,6 +30,7 @@ export function VertexScreenXCollector({
       r: data.map(d => d.r),
       g: data.map(d => d.g),
       b: data.map(d => d.b),
+      source,
     };
 
     setVertexData(vertexData);
