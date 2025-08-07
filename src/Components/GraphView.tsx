@@ -2,7 +2,7 @@ import React from "react";
 import "../App.css";
 import { WaveformGraph } from "./WaveformGraph";
 
-const debugStyle: React.CSSProperties = {
+const GraphViewStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 16px",
   fontFamily: "monospace",
@@ -10,7 +10,7 @@ const debugStyle: React.CSSProperties = {
   fontSize: "14px",
 };
 
-interface DebugProps {
+interface GraphViewProps {
   vertexData: {
     screenX: number[];
     screenY: number[];
@@ -22,10 +22,10 @@ interface DebugProps {
   };
 }
 
-const Debug: React.FC<DebugProps> = ({ vertexData }) => {
+function GraphView({ vertexData }: GraphViewProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(600);
-  // console.log("Debug component initialized with vertex data:", vertexData.screenZ);
+  // console.log("GraphView component initialized with vertex data:", vertexData.screenZ);
 
   React.useEffect(() => {
     function updateWidth() {
@@ -39,7 +39,7 @@ const Debug: React.FC<DebugProps> = ({ vertexData }) => {
   }, []);
 
   return (
-    <div style={debugStyle} ref={containerRef}>
+    <div style={GraphViewStyle} ref={containerRef}>
       {/* <div style={{ marginBottom: 8, fontSize: 12, color: "#888" }}>Screen X (NDC)</div> */}
       <WaveformGraph data={vertexData.screenX} width={width} color='#00ff99' source={vertexData.source} />
 
@@ -59,6 +59,6 @@ const Debug: React.FC<DebugProps> = ({ vertexData }) => {
       <WaveformGraph data={vertexData.b} width={width} color='#0099ff' source={vertexData.source} />
     </div>
   );
-};
+}
 
-export default Debug;
+export default GraphView;

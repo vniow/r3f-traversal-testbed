@@ -23,7 +23,7 @@ export function getInterpolatedPoints(objects: ObjectWithVertices[]) {
     const b = objB.points[0];
     const colorA = objA.colors[objA.colors.length - 1] || [1, 1, 1];
     const colorB = objB.colors[0] || [1, 1, 1];
-    const numInterp = 15;
+    const numInterp = 3;
 
     for (let j = 1; j <= numInterp; j++) {
       const t = j / (numInterp + 1);

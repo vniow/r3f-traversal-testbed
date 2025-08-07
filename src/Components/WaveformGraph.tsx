@@ -41,7 +41,7 @@ export function WaveformGraph({ data, width = 600, height = 120, color = "#00ff9
   const points = React.useMemo(() => getWaveformPoints(data, width, height), [data, width, height]);
   const [hovered, setHovered] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number; source?: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number; index: number; source?: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Calculate reference line positions with 10px margins
@@ -76,6 +76,7 @@ export function WaveformGraph({ data, width = 600, height = 120, color = "#00ff9
         x: ((closestPt[0] + width / 2) / width) * rect.width,
         y: ((halfHeight - closestPt[1]) / (2 * halfHeight)) * (rect.height - 20) + 10,
         value: data[closestIdx],
+        index: closestIdx,
         source: source && source[closestIdx] ? source[closestIdx] : undefined,
       });
     } else {
@@ -122,7 +123,7 @@ export function WaveformGraph({ data, width = 600, height = 120, color = "#00ff9
       </div>
       <View style={{ width: "100%", height: "100%" }}>
         <WaveformBackground />
-        <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={1} />
+        <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={0.9} />
         <ambientLight intensity={0.5} />
         {points.length > 1 && <Line points={points} color={highlightColor} lineWidth={hovered ? 3 : 2} />}
 
@@ -211,6 +212,7 @@ export function WaveformGraph({ data, width = 600, height = 120, color = "#00ff9
             boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
           }}
         >
+          <span style={{ marginRight: 8, color: "#aaa" }}>#{tooltip.index}</span>
           {tooltip.value.toFixed(4)}
           {tooltip.source && (
             <span style={{ marginLeft: 8, color: tooltip.source === "interpolated" ? "#ff0" : "#fff", fontWeight: 600 }}>

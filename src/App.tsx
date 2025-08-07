@@ -5,7 +5,8 @@ import type { ObjectWithVertices } from "./Components/vertexUtils";
 import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
 import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
 import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
-import Debug from "./Components/Debug";
+import GraphView from "./Components/GraphView";
+import { AudioControls } from "./Components/AudioControls";
 import { useState } from "react";
 import { SceneView } from "./Components/SceneView";
 
@@ -36,6 +37,7 @@ function App() {
     r: number[];
     g: number[];
     b: number[];
+    source?: ("object" | "interpolated")[];
   }>({
     screenX: [],
     screenY: [],
@@ -43,23 +45,22 @@ function App() {
     r: [],
     g: [],
     b: [],
+    source: [],
   });
 
   return (
     <>
       <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", width: "100%", height: "100vh" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Debug vertexData={vertexData} />
+          <GraphView vertexData={vertexData} />
         </div>
-        <div
-          style={{
-            width: 512,
-            minWidth: 256,
-            height: 512,
-            marginLeft: 24,
-          }}
-        >
-          <SceneView objects={objects} setVertexData={setVertexData} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, width: 256, minWidth: 256, marginLeft: 24 }}>
+          <div style={{ width: "100%", aspectRatio: "1 / 1" }}>
+            <SceneView objects={objects} setVertexData={setVertexData} />
+          </div>
+          <div style={{ width: "100%" }}>
+            <AudioControls vertexData={vertexData} />
+          </div>
         </div>
       </div>
       <Canvas style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>

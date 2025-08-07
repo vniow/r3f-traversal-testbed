@@ -13,7 +13,15 @@ import { VertexScreenXCollector } from "./VertexScreenXCollector";
 
 interface SceneViewProps {
   objects: ObjectWithVertices[];
-  setVertexData: (data: { screenX: number[]; screenY: number[]; screenZ: number[]; r: number[]; g: number[]; b: number[] }) => void;
+  setVertexData: (data: {
+    screenX: number[];
+    screenY: number[];
+    screenZ: number[];
+    r: number[];
+    g: number[];
+    b: number[];
+    source?: ("object" | "interpolated")[];
+  }) => void;
 }
 
 function SceneBackground() {
