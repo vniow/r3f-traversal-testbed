@@ -1,77 +1,195 @@
-import { View, OrthographicCamera } from "@react-three/drei";
-import { useEffect, useState } from "react";
-import { Sphere } from "@react-three/drei";
+import { View, OrthographicCamera, Line } from "@react-three/drei";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Color } from "three";
 import Lights from "./Lights";
 
-// Number of visualized points/vertices
-const NUM_POINTS = 5;
-
-// Helper to generate random value in [-1, 1]
-function randomValue() {
-  return Math.random() * 2 - 1;
+// Interface for reconstructed vertex data from audio analyzers
+interface ReconstructedVertexData {
+  screenX: number[];
+  screenY: number[];
+  screenZ: number[];
+  r: number[];
+  g: number[];
+  b: number[];
 }
 
-export function RenderView() {
-  // State for analyser values (simulate with random noise)
-  const [analyserValues, setAnalyserValues] = useState(
-    Array(NUM_POINTS)
-      .fill(0)
-      .map(() => ({
-        x: randomValue(),
-        y: randomValue(),
-        z: randomValue(),
-        r: Math.random(),
-        g: Math.random(),
-        b: Math.random(),
-      }))
-  );
+interface RenderViewProps {
+  audioContext?: AudioContext | null;
+  audioWorkletNode?: AudioWorkletNode | null;
+}
 
-  // Update values every frame (simulate audio input)
-  useEffect(() => {
-    let running = true;
-    function update() {
-      setAnalyserValues(
-        Array(NUM_POINTS)
-          .fill(0)
-          .map(() => ({
-            x: randomValue(),
-            y: randomValue(),
-            z: randomValue(),
-            r: Math.random(),
-            g: Math.random(),
-            b: Math.random(),
-          }))
-      );
-      if (running) requestAnimationFrame(update);
-    }
-    update();
-    return () => {
-      running = false;
+export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) {
+  // Audio analyzers for each channel
+  const analyzersRef = useRef<Record<string, AnalyserNode>>({});
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // State for reconstructed vertex data from audio analysis
+  const [vertexData, setVertexData] = useState<ReconstructedVertexData>({
+    screenX: [],
+    screenY: [],
+    screenZ: [],
+    r: [],
+    g: [],
+    b: []
+  });
+
+  // Initialize audio analyzers for each channel
+  const initializeAnalyzers = useCallback(() => {
+    if (!audioContext || !audioWorkletNode) return;
+
+    const channelNames = ['screenX', 'screenY', 'screenZ', 'r', 'g', 'b'];
+    
+    // Create a channel splitter to separate the 6-channel audio
+    const splitter = audioContext.createChannelSplitter(6);
+    audioWorkletNode.connect(splitter);
+
+    // Create analyzer for each channel - similar to Reactoscope pattern
+    channelNames.forEach((channelName, index) => {
+      const analyzer = audioContext.createAnalyser();
+      analyzer.fftSize = 2048; // Higher resolution for time domain analysis
+      analyzer.smoothingTimeConstant = 0.0; // No smoothing for direct reconstruction
+      analyzer.minDecibels = -90;
+      analyzer.maxDecibels = -10;
+      
+      // Connect the specific channel to its analyzer
+      splitter.connect(analyzer, index);
+      
+      analyzersRef.current[channelName] = analyzer;
+    });
+  }, [audioContext, audioWorkletNode]);
+
+  // Convert audio analyzer data back to vertex coordinates using time domain
+  const analyzeAudioToVertexData = useCallback(() => {
+    const analyzers = analyzersRef.current;
+    if (Object.keys(analyzers).length === 0) return;
+
+    const newVertexData: ReconstructedVertexData = {
+      screenX: [],
+      screenY: [],
+      screenZ: [],
+      r: [],
+      g: [],
+      b: []
     };
+
+    // Get time domain data from each analyzer (similar to Reactoscope pattern)
+    Object.entries(analyzers).forEach(([channelName, analyzer]) => {
+      const bufferLength = analyzer.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      // Use time domain data instead of frequency data - this gives us the actual audio waveform
+      analyzer.getByteTimeDomainData(dataArray);
+      
+      // Sample the data similar to Reactoscope WaveScreen sampling pattern
+      const width = 128; // Number of points for visualization
+      const step = bufferLength / width;
+      const sampledData: number[] = [];
+      
+      for (let i = 0; i < width; i++) {
+        const pcmIndex = Math.floor(i * step);
+        // Convert byte value (0-255) where 128 is zero/center
+        let value = (dataArray[pcmIndex] - 128) / 128.0; // Range: [-1, 1]
+        
+        // Apply channel-specific scaling based on data type
+        if (channelName === 'screenX' || channelName === 'screenY') {
+          // Position coordinates: keep full range [-1, 1]
+          // Already in correct range
+        } else if (channelName === 'screenZ') {
+          // Z coordinate: similar to X/Y
+          // Already in correct range
+        } else {
+          // Color channels (r, g, b): convert to [0, 1] range
+          value = (value + 1) / 2; // Convert [-1, 1] to [0, 1]
+          value = Math.max(0, Math.min(1, value)); // Clamp to ensure valid range
+        }
+        
+        sampledData.push(value);
+      }
+      
+      // Store the reconstructed data
+      newVertexData[channelName as keyof ReconstructedVertexData] = sampledData;
+    });
+
+    setVertexData(newVertexData);
   }, []);
 
-  // Map z to luminance (0 = dark, 1 = bright)
-  function getLuminance(z: number) {
-    // Map z from [-1,1] to [0.2, 1]
-    return 0.2 + 0.8 * ((z + 1) / 2);
-  }
+  // Animation loop for continuous audio analysis
+  const animate = useCallback(() => {
+    analyzeAudioToVertexData();
+    animationFrameRef.current = requestAnimationFrame(animate);
+  }, [analyzeAudioToVertexData]);
+
+  // Initialize analyzers when audio context and worklet are available
+  useEffect(() => {
+    if (audioContext && audioWorkletNode) {
+      initializeAnalyzers();
+      
+      // Start the analysis animation loop
+      animate();
+      
+      return () => {
+        if (animationFrameRef.current !== null) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    }
+  }, [audioContext, audioWorkletNode, initializeAnalyzers, animate]);
+
+  // Convert vertex data to Line component format with per-vertex colors
+  const getLineData = () => {
+    const points: [number, number, number][] = [];
+    const colors: Color[] = [];
+    
+    // Use the minimum length across all coordinate arrays
+    const minLength = Math.min(
+      vertexData.screenX.length,
+      vertexData.screenY.length,
+      vertexData.r.length,
+      vertexData.g.length,
+      vertexData.b.length
+    );
+    
+    for (let i = 0; i < minLength; i++) {
+      // Use screenX and screenY for position, optionally use screenZ
+      points.push([
+        vertexData.screenX[i] * 3, // Scale for visibility
+        vertexData.screenY[i] * 3, // Scale for visibility  
+        vertexData.screenZ[i] * 0.5 // Use Z data with smaller scale
+      ]);
+      
+      // Create color for each vertex using RGB data from audio analyzers
+      colors.push(new Color(
+        Math.max(0, Math.min(1, vertexData.r[i])), // Clamp to [0, 1]
+        Math.max(0, Math.min(1, vertexData.g[i])), // Clamp to [0, 1]
+        Math.max(0, Math.min(1, vertexData.b[i]))  // Clamp to [0, 1]
+      ));
+    }
+    
+    return { points, colors };
+  };
+
+  const { points, colors } = getLineData();
 
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
       <Lights />
-      {/* Render spheres for each analyser value */}
-      {analyserValues.map((val, i) => {
-        // Color with luminance
-        const lum = getLuminance(val.z);
-        const color = new Color(val.r * lum, val.g * lum, val.b * lum);
-        return (
-          <Sphere key={i} args={[0.08, 16, 16]} position={[val.x * 2, val.y * 2, 0]}>
-            <meshStandardMaterial attach='material' color={color} />
-          </Sphere>
-        );
-      })}
+      {/* Render line visualization using reconstructed vertex data from audio */}
+      {points.length > 1 && (
+        <Line
+          points={points}
+          vertexColors={colors}
+          lineWidth={3}
+          dashed={false}
+        />
+      )}
+      {/* Debug info overlay */}
+      {points.length > 0 && (
+        <mesh position={[-4, 3, 0]}>
+          <planeGeometry args={[3, 1]} />
+          <meshBasicMaterial color="black" transparent opacity={0.7} />
+        </mesh>
+      )}
     </View>
   );
 }

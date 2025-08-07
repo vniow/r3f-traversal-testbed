@@ -116,4 +116,12 @@ export class VertexAudioEngine {
   get playing(): boolean {
     return this.isPlaying;
   }
+
+  get context(): AudioContext | null {
+    return this.audioContext;
+  }
+
+  get workletNode(): AudioWorkletNode | null {
+    return this.audioWorkletNode;
+  }
 }

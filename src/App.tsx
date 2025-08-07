@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { SceneView } from "./Components/SceneView";
 import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
+import { RenderView } from "./Components/RenderView";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -60,6 +61,8 @@ function App() {
     togglePlayback,
     setGlobalGain,
     setChannelGain,
+    audioContext,
+    audioWorkletNode,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes
@@ -82,11 +85,8 @@ function App() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <GraphView vertexData={vertexData} />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, width: 256, minWidth: 256, marginLeft: 24 }}>
-          <div style={{ width: "100%", aspectRatio: "1 / 1" }}>
-            <SceneView objects={objects} setVertexData={setVertexData} />
-          </div>
-          <div style={{ width: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "row", gap: 24, marginLeft: 24 }}>
+          <div style={{ width: 256, minWidth: 256 }}>
             <AudioControls
               isInitialized={isInitialized}
               isPlaying={isPlaying}
@@ -96,6 +96,15 @@ function App() {
               onTogglePlayback={togglePlayback}
               onSetGlobalGain={setGlobalGain}
               onSetChannelGain={setChannelGain}
+            />
+          </div>
+          <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
+            <SceneView objects={objects} setVertexData={setVertexData} />
+          </div>
+          <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
+            <RenderView 
+              audioContext={audioContext} 
+              audioWorkletNode={audioWorkletNode} 
             />
           </div>
         </div>

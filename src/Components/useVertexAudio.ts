@@ -73,5 +73,7 @@ export function useVertexAudio() {
     togglePlayback,
     setGlobalGain,
     setChannelGain,
+    audioContext: audioEngineRef.current?.context || null,
+    audioWorkletNode: audioEngineRef.current?.workletNode || null,
   };
 }
