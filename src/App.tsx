@@ -6,8 +6,10 @@ import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
 import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
 import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import GraphView from "./Components/GraphView";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SceneView } from "./Components/SceneView";
+import { useVertexAudio } from "./Components/useVertexAudio";
+import { AudioControls } from "./Components/AudioControls";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -47,6 +49,33 @@ function App() {
     source: [],
   });
 
+  // Audio synthesis hook
+  const {
+    isInitialized,
+    isPlaying,
+    globalGain,
+    channelGains,
+    initializeAudio,
+    updateVertexData,
+    togglePlayback,
+    setGlobalGain,
+    setChannelGain,
+  } = useVertexAudio();
+
+  // Update audio engine when vertex data changes
+  useEffect(() => {
+    if (isInitialized) {
+      updateVertexData({
+        screenX: vertexData.screenX,
+        screenY: vertexData.screenY,
+        screenZ: vertexData.screenZ,
+        r: vertexData.r,
+        g: vertexData.g,
+        b: vertexData.b,
+      });
+    }
+  }, [vertexData, isInitialized, updateVertexData]);
+
   return (
     <>
       <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", width: "100%", height: "100vh" }}>
@@ -58,7 +87,16 @@ function App() {
             <SceneView objects={objects} setVertexData={setVertexData} />
           </div>
           <div style={{ width: "100%" }}>
-
+            <AudioControls
+              isInitialized={isInitialized}
+              isPlaying={isPlaying}
+              globalGain={globalGain}
+              channelGains={channelGains}
+              onInitialize={initializeAudio}
+              onTogglePlayback={togglePlayback}
+              onSetGlobalGain={setGlobalGain}
+              onSetChannelGain={setChannelGain}
+            />
           </div>
         </div>
       </div>
