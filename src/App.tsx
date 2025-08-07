@@ -6,7 +6,6 @@ import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
 import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
 import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import GraphView from "./Components/GraphView";
-import { AudioControls } from "./Components/AudioControls";
 import { useState } from "react";
 import { SceneView } from "./Components/SceneView";
 
@@ -59,7 +58,7 @@ function App() {
             <SceneView objects={objects} setVertexData={setVertexData} />
           </div>
           <div style={{ width: "100%" }}>
-            <AudioControls vertexData={vertexData} />
+
           </div>
         </div>
       </div>
