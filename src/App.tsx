@@ -11,6 +11,8 @@ import { SceneView } from "./Components/SceneView";
 import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
+import { WorkletWaveform } from "./Components/WorkletWaveform";
+import { LoopOutputWaveform } from "./Components/LoopOutputWaveform";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -63,6 +65,8 @@ function App() {
     setChannelGain,
     audioContext,
     audioWorkletNode,
+    dataForRender,
+    loopTick,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes
@@ -102,10 +106,13 @@ function App() {
             <SceneView objects={objects} setVertexData={setVertexData} />
           </div>
           <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <RenderView 
-              audioContext={audioContext} 
-              audioWorkletNode={audioWorkletNode} 
-            />
+            <RenderView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
+          </div>
+          <div style={{ width: 256, minWidth: 256 }}>
+            <WorkletWaveform audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
+          </div>
+          <div style={{ width: 256, minWidth: 256 }}>
+            <LoopOutputWaveform audioContext={audioContext} dataForRender={dataForRender} loopTick={loopTick} />
           </div>
         </div>
       </div>

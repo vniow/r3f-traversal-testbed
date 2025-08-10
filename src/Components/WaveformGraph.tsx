@@ -123,7 +123,7 @@ export function WaveformGraph({ data, width = 600, height = 120, color = "#00ff9
       </div>
       <View style={{ width: "100%", height: "100%" }}>
         <WaveformBackground />
-        <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={0.9} />
+        <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={1} />
         <ambientLight intensity={0.5} />
         {points.length > 1 && <Line points={points} color={highlightColor} lineWidth={hovered ? 3 : 2} />}
 
