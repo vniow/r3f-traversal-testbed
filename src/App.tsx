@@ -12,7 +12,7 @@ import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
 import { WorkletWaveform } from "./Components/WorkletWaveform";
-import { LoopOutputWaveform } from "./Components/LoopOutputWaveform";
+// import { LoopOutputWaveform } from "./Components/LoopOutputWaveform";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -65,8 +65,8 @@ function App() {
     setChannelGain,
     audioContext,
     audioWorkletNode,
-    dataForRender,
-    loopTick,
+    // dataForRender,
+    // loopTick,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes
@@ -111,9 +111,9 @@ function App() {
           <div style={{ width: 256, minWidth: 256 }}>
             <WorkletWaveform audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
           </div>
-          <div style={{ width: 256, minWidth: 256 }}>
-            <LoopOutputWaveform audioContext={audioContext} dataForRender={dataForRender} loopTick={loopTick} />
-          </div>
+          {/* <div style={{ width: 256, minWidth: 256 }}> */}
+          {/* <LoopOutputWaveform audioContext={audioContext} dataForRender={dataForRender} loopTick={loopTick} /> */}
+          {/* </div> */}
         </div>
       </div>
       <Canvas style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>

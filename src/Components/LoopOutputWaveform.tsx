@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type ChannelName = "screenX" | "screenY" | "screenZ" | "r" | "g" | "b";
 const CHANNELS: ChannelName[] = ["screenX", "screenY", "screenZ", "r", "g", "b"];
@@ -33,64 +33,79 @@ export function LoopOutputWaveform({ audioContext, dataForRender, loopTick, widt
     b: null,
   });
   const rafRef = useRef<number | null>(null);
-  const [loopStartTime, setLoopStartTime] = useState<number | null>(null);
+  // Refs to avoid state updates
+  const loopStartTimeRef = useRef<number | null>(null);
+  const vertexDataRef = useRef<{ [K in ChannelName]: number[] } | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // track the most recent loop start time provided by the worklet
+  // Update refs from props
   useEffect(() => {
-    if (loopTick?.t != null) setLoopStartTime(loopTick.t);
-  }, [loopTick]);
+    audioCtxRef.current = audioContext;
+  }, [audioContext]);
 
-  const draw = useMemo(() => {
-    const fn = () => {
-      const vd = dataForRender?.vertexData;
-      if (!vd || !audioContext || loopStartTime == null) {
-        rafRef.current = requestAnimationFrame(fn);
+  useEffect(() => {
+    vertexDataRef.current = dataForRender?.vertexData ?? null;
+  }, [dataForRender]);
+
+  useEffect(() => {
+    if (loopTick?.t != null) {
+      loopStartTimeRef.current = loopTick.t;
+    }
+  }, [loopTick?.t]);
+
+  // Stable rAF loop reading from refs
+  useEffect(() => {
+    const draw = () => {
+      const vd = vertexDataRef.current;
+      const ctx = audioCtxRef.current;
+      const loopStartTime = loopStartTimeRef.current;
+      if (!vd || !ctx || loopStartTime == null) {
+        rafRef.current = requestAnimationFrame(draw);
         return;
       }
 
       CHANNELS.forEach(name => {
         const canvas = canvasesRef.current[name];
         if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        const g = canvas.getContext("2d");
+        if (!g) return;
 
         const arr = vd[name] || [];
         const len = arr.length;
         if (len === 0) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "#111";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          g.clearRect(0, 0, canvas.width, canvas.height);
+          g.fillStyle = "#111";
+          g.fillRect(0, 0, canvas.width, canvas.height);
           return;
         }
 
-        const sr = audioContext.sampleRate;
-        const elapsedSamples = Math.floor((audioContext.currentTime - loopStartTime) * sr);
+        const sr = ctx.sampleRate;
+        const elapsedSamples = Math.floor((ctx.currentTime - loopStartTime) * sr);
         const startIndex = ((elapsedSamples % len) + len) % len;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#111";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        g.clearRect(0, 0, canvas.width, canvas.height);
+        g.fillStyle = "#111";
+        g.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.strokeStyle = "#444";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
-        ctx.strokeStyle = "#333";
-        ctx.beginPath();
-        ctx.moveTo(0, 8);
-        ctx.lineTo(canvas.width, 8);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height - 8);
-        ctx.lineTo(canvas.width, canvas.height - 8);
-        ctx.stroke();
+        g.strokeStyle = "#444";
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(0, canvas.height / 2);
+        g.lineTo(canvas.width, canvas.height / 2);
+        g.stroke();
+        g.strokeStyle = "#333";
+        g.beginPath();
+        g.moveTo(0, 8);
+        g.lineTo(canvas.width, 8);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(0, canvas.height - 8);
+        g.lineTo(canvas.width, canvas.height - 8);
+        g.stroke();
 
-        ctx.strokeStyle = CHANNEL_COLORS[name];
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
+        g.strokeStyle = CHANNEL_COLORS[name];
+        g.lineWidth = 2;
+        g.beginPath();
         for (let i = 0; i < len; i++) {
           const idx = (startIndex + i) % len;
           const v = arr[idx];
@@ -99,23 +114,20 @@ export function LoopOutputWaveform({ audioContext, dataForRender, loopTick, widt
             name === "r" || name === "g" || name === "b"
               ? canvas.height - 8 - Math.max(0, Math.min(1, v)) * (canvas.height - 16)
               : canvas.height / 2 - Math.max(-1, Math.min(1, v)) * (canvas.height / 2 - 8);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
         }
-        ctx.stroke();
+        g.stroke();
       });
 
-      rafRef.current = requestAnimationFrame(fn);
+      rafRef.current = requestAnimationFrame(draw);
     };
-    return fn;
-  }, [audioContext, dataForRender, loopStartTime]);
 
-  useEffect(() => {
     rafRef.current = requestAnimationFrame(draw);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [audioContext, dataForRender, loopStartTime, draw]);
+  }, []);
 
   const grid = useMemo(() => {
     const rowHeight = Math.max(60, Math.floor(height / 6));
