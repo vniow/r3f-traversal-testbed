@@ -6,6 +6,7 @@ import type { ObjectWithVertices } from "./vertexUtils";
 export interface VertexScreenData {
   screenX: number;
   screenY: number;
+  // Repurposed: screenZ now encodes per-vertex intensity (0..1) for BeamLine / audio channel 3
   screenZ: number;
   r: number;
   g: number;
@@ -51,12 +52,12 @@ export function collectVertexScreenData(
     const v = new Vector3(...p);
     const projected = v.project(camera);
     const color = colors[i] || [1, 1, 1];
-    // Override Z for visualization: 0 for object, 1 for interpolated
-    const zVal = source[i] === "interpolated" ? 1 : 0;
+    // Intensity rule: object vertices full intensity (1), interpolated vertices blanked (0)
+    const intensity = source[i] === "interpolated" ? 0 : 1;
     return {
       screenX: projected.x,
       screenY: projected.y,
-      screenZ: zVal,
+      screenZ: intensity, // intensity encoded here
       r: color[0],
       g: color[1],
       b: color[2],

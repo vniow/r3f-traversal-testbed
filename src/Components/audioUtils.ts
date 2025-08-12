@@ -16,7 +16,7 @@ export interface AudioChannelConfig {
 export const AUDIO_CHANNELS: Record<string, AudioChannelConfig> = {
   screenX: { name: "Screen X", gain: 1, color: "#00ff99" },
   screenY: { name: "Screen Y", gain: 1, color: "#ff9900" },
-  screenZ: { name: "Screen Z", gain: 1, color: "#9900ff" },
+  screenZ: { name: "Intensity", gain: 1, color: "#cccccc" }, // repurposed as intensity
   r: { name: "Red", gain: 1, color: "#ff0000" },
   g: { name: "Green", gain: 1, color: "#00ff00" },
   b: { name: "Blue", gain: 1, color: "#0099ff" },

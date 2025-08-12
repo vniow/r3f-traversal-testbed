@@ -29,7 +29,7 @@ export function getInterpolatedPoints(objects: ObjectWithVertices[]) {
       const t = j / (numInterp + 1);
       const interp = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t] as [number, number, number];
       // Set z=1 for interpolated points only
-      interp[2] = 1;
+      interp[2] = 0;
       const interpColor = [
         colorA[0] + (colorB[0] - colorA[0]) * t,
         colorA[1] + (colorB[1] - colorA[1]) * t,

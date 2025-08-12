@@ -89,7 +89,7 @@ function App() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <GraphView vertexData={vertexData} />
         </div>
-        <div style={{ display: "flex", flexDirection: "row", gap: 24, marginLeft: 24 }}>
+        <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", gap: 24, marginLeft: 24 }}>
           <div style={{ width: 256, minWidth: 256 }}>
             <AudioControls
               isInitialized={isInitialized}
@@ -111,9 +111,6 @@ function App() {
           <div style={{ width: 256, minWidth: 256 }}>
             <WorkletWaveform audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
           </div>
-          {/* <div style={{ width: 256, minWidth: 256 }}> */}
-          {/* <LoopOutputWaveform audioContext={audioContext} dataForRender={dataForRender} loopTick={loopTick} /> */}
-          {/* </div> */}
         </div>
       </div>
       <Canvas style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>

@@ -1,7 +1,8 @@
-import { View, OrthographicCamera, Line } from "@react-three/drei";
+import { View, OrthographicCamera } from "@react-three/drei";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Color } from "three";
 import Lights from "./Lights";
+import { BeamLine } from "./BeamLine";
 
 // Interface for reconstructed vertex data from audio analyzers
 interface ReconstructedVertexData {
@@ -135,49 +136,81 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
     }
   }, [audioContext, audioWorkletNode, initializeAnalyzers, animate]);
 
-  // Convert vertex data to Line component format with per-vertex colors
-  const getLineData = () => {
+  // Map vertex data into beam line geometry + intensity attribute
+  const getBeamData = () => {
     const points: [number, number, number][] = [];
     const colors: Color[] = [];
+    const intensities: number[] = [];
 
-    // Use the minimum length across all coordinate arrays
     const minLength = Math.min(
       vertexData.screenX.length,
       vertexData.screenY.length,
+      vertexData.screenZ.length,
       vertexData.r.length,
       vertexData.g.length,
       vertexData.b.length
     );
 
     for (let i = 0; i < minLength; i++) {
-      // Use screenX and screenY for position, optionally use screenZ
-      points.push([
-        vertexData.screenX[i] * 3, // Scale for visibility
-        vertexData.screenY[i] * 3, // Scale for visibility
-        vertexData.screenZ[i] * 0.5, // Use Z data with smaller scale
-      ]);
+      // Keep geometry planar (z=0); screenZ is already an intensity (0 for interpolated, 1 for object)
+      points.push([vertexData.screenX[i] * 3, vertexData.screenY[i] * 3, 0]);
 
-      // Create color for each vertex using RGB data from audio analyzers
+      const intensity = Math.max(0, Math.min(1, vertexData.screenZ[i]));
+      intensities.push(intensity);
+
+      // Raw RGB already 0..1 from reconstruction
       colors.push(
         new Color(
-          Math.max(0, Math.min(1, vertexData.r[i])), // Clamp to [0, 1]
-          Math.max(0, Math.min(1, vertexData.g[i])), // Clamp to [0, 1]
-          Math.max(0, Math.min(1, vertexData.b[i])) // Clamp to [0, 1]
+          Math.max(0, Math.min(1, vertexData.r[i])),
+          Math.max(0, Math.min(1, vertexData.g[i])),
+          Math.max(0, Math.min(1, vertexData.b[i]))
         )
       );
     }
 
-    return { points, colors };
+    return { points, colors, intensities };
   };
 
-  const { points, colors } = getLineData();
+  const { points, colors, intensities } = getBeamData();
+
+  // Split into visible segments to avoid drawing through zero-intensity (blank) regions
+  const buildSegments = (threshold = 0.02) => {
+    const segments: { points: [number, number, number][]; colors: Color[]; intensities: number[] }[] = [];
+    let segPoints: [number, number, number][] = [];
+    let segColors: Color[] = [];
+    let segIntensities: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const I = intensities[i];
+      if (I > threshold) {
+        segPoints.push(points[i]);
+        segColors.push(colors[i]);
+        segIntensities.push(I);
+      } else {
+        if (segPoints.length > 1) {
+          segments.push({ points: segPoints, colors: segColors, intensities: segIntensities });
+        }
+        // Reset segment (single orphan points are ignored to avoid tiny stubs)
+        segPoints = [];
+        segColors = [];
+        segIntensities = [];
+      }
+    }
+    if (segPoints.length > 1) {
+      segments.push({ points: segPoints, colors: segColors, intensities: segIntensities });
+    }
+    return segments;
+  };
+
+  const beamSegments = buildSegments();
 
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
       <Lights />
       {/* Render line visualization using reconstructed vertex data from audio */}
-      {points.length > 1 && <Line points={points} vertexColors={colors} lineWidth={3} dashed={false} />}
+      {beamSegments.map((seg, i) => (
+        <BeamLine key={i} points={seg.points} colors={seg.colors} intensities={seg.intensities} blankThreshold={0.02} gamma={2.2} />
+      ))}
     </View>
   );
 }
