@@ -63,6 +63,10 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   const rowHeight = 120;
   // Phase shift fraction (-1 .. 1) applied to the reference window length
   const [phaseShift, setPhaseShift] = useState<number>(0);
+  // Fixed offset mode: bypass trigger detection and anchor to predicted loop tick position
+  const [fixedOffsetMode, setFixedOffsetMode] = useState<boolean>(false);
+  // Optional fractional offset (0..1) shifts tick within window when in fixed mode
+  const [fixedOffsetFrac, setFixedOffsetFrac] = useState<number>(0); // 0 = tick at left edge
 
   // Analyzer plumbing
   const analyzersRef = useRef<Record<ChannelName, AnalyserNode>>({} as Record<ChannelName, AnalyserNode>);
@@ -213,21 +217,29 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       if (refWindowLen > 0) {
         const tick = lastTickTimeRef.current;
         const sr = sampleRateRef.current;
-        if (tick != null && audioContext) {
+        if (fixedOffsetMode && tick != null && audioContext) {
           const dt = Math.max(0, audioContext.currentTime - tick);
           const samplesSinceTick = Math.floor((dt * sr) % Math.max(1, loopLen || refWindowLen));
-          // Index of tick sample in buffer (newest is bufferLength-1)
+            // We want tick at left edge then optional fractional offset forward inside window
           const idxTick = (bufferLength - 1 - samplesSinceTick + bufferLength) % bufferLength;
-          refStart = idxTick;
+          const offsetSamples = Math.round(fixedOffsetFrac * refWindowLen);
+          refStart = (idxTick + offsetSamples) % bufferLength;
         } else {
-          // Fallback to trigger on reference channel
-          const searchEnd = bufferLength;
-          const searchStart = Math.max(0, searchEnd - refWindowLen - 64);
-          const trig = findTriggerIndex(timeData, searchStart, searchEnd);
-          let start = trig ?? bufferLength - refWindowLen;
-          if (start + refWindowLen > bufferLength) start = bufferLength - refWindowLen;
-          if (start < 0) start = 0;
-          refStart = start;
+          const dt = tick != null && audioContext ? Math.max(0, audioContext.currentTime - tick) : null;
+          if (dt != null) {
+            const samplesSinceTick = Math.floor((dt * sr) % Math.max(1, loopLen || refWindowLen));
+            const idxTick = (bufferLength - 1 - samplesSinceTick + bufferLength) % bufferLength;
+            refStart = idxTick;
+          } else if (!fixedOffsetMode) {
+            // Fallback to trigger detection only when not in fixed mode
+            const searchEnd = bufferLength;
+            const searchStart = Math.max(0, searchEnd - refWindowLen - 64);
+            const trig = findTriggerIndex(timeData, searchStart, searchEnd);
+            let start = trig ?? bufferLength - refWindowLen;
+            if (start + refWindowLen > bufferLength) start = bufferLength - refWindowLen;
+            if (start < 0) start = 0;
+            refStart = start;
+          }
         }
       }
     }
@@ -346,7 +358,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     }
 
     rafRef.current = requestAnimationFrame(draw);
-  }, [rows, width, rowHeight, totalHeight, audioContext, phaseShift]);
+  }, [rows, width, rowHeight, totalHeight, audioContext, phaseShift, fixedOffsetMode, fixedOffsetFrac]);
 
   useEffect(() => {
     const cleanup = initAnalyzers();
@@ -363,7 +375,35 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   return (
     <div style={{ ...GraphViewStyle, position: "relative" }} ref={containerRef}>
       {/* Phase shift control */}
-      <div style={{ position: "sticky", top: 0, background: "#111", paddingBottom: 8, zIndex: 10 }}>
+      <div style={{ position: "sticky", top: 0, background: "#111", padding: "4px 0 8px", zIndex: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#ccc" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={fixedOffsetMode}
+              onChange={e => setFixedOffsetMode(e.target.checked)}
+              aria-label="Toggle fixed offset mode"
+            />
+            Fixed Offset Mode
+          </label>
+          {fixedOffsetMode && (
+            <span style={{ fontSize: 10, color: "#666" }}>Loop-anchored</span>
+          )}
+        </div>
+        {fixedOffsetMode && (
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: "#ccc" }}>
+            <span>Fixed Offset ({(fixedOffsetFrac * 100).toFixed(1)}%)</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.001}
+              value={fixedOffsetFrac}
+              onChange={e => setFixedOffsetFrac(parseFloat(e.target.value))}
+              aria-label="Fixed offset within window"
+            />
+          </label>
+        )}
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#ccc" }}>
           <span>Phase Shift ({(phaseShift * 100).toFixed(1)}%)</span>
           <input
@@ -375,13 +415,15 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
             onChange={e => setPhaseShift(parseFloat(e.target.value))}
             style={{ width: "100%" }}
             aria-label="Phase shift"
+            disabled={fixedOffsetMode}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#666" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: fixedOffsetMode ? "#333" : "#666" }}>
             <span>-100%</span>
             <button
               type="button"
               onClick={() => setPhaseShift(0)}
-              style={{ cursor: "pointer", background: "#222", color: "#ccc", border: "1px solid #333", padding: "2px 6px", fontSize: 10 }}
+              disabled={fixedOffsetMode}
+              style={{ cursor: fixedOffsetMode ? "not-allowed" : "pointer", background: "#222", color: "#ccc", border: "1px solid #333", padding: "2px 6px", fontSize: 10 }}
             >
               Reset
             </button>

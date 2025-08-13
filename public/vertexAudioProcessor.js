@@ -42,7 +42,7 @@ class VertexAudioProcessor extends AudioWorkletProcessor {
             lengths[name] = Array.isArray(this.channels[name].data) ? this.channels[name].data.length : 0;
           });
           // sampleRate is available on AudioWorkletGlobalScope in AudioWorkletProcessor context
-          const sr = typeof sampleRate !== "undefined" ? sampleRate : 48000;
+          const sr = typeof sampleRate !== "undefined" ? sampleRate : 44100;
           this.port.postMessage({ type: "channelInfo", lengths, sampleRate: sr });
         } catch (e) {
           // ignore
