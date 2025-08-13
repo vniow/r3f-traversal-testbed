@@ -65,6 +65,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   // Analyzer plumbing
   const analyzersRef = useRef<Record<ChannelName, AnalyserNode>>({} as Record<ChannelName, AnalyserNode>);
   const dataLenRef = useRef<Record<ChannelName, number>>({} as Record<ChannelName, number>);
+  const sampleRateRef = useRef<number>(48000);
+  const lastTickTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const initializedRef = useRef(false);
 
@@ -99,22 +101,37 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       analyzersRef.current[name] = an;
     });
 
-    type ChannelInfoMsg = { type: "channelInfo"; lengths: Record<string, number> };
+    type ChannelInfoMsg = { type: "channelInfo"; lengths: Record<string, number>; sampleRate?: number };
+    type LoopTickMsg = { type: "loopTick"; t: number; lengths: Record<string, number> };
     const handler = (e: MessageEvent) => {
-      const msg = e.data as ChannelInfoMsg;
-      if (msg && msg.type === "channelInfo") {
+      const msg = e.data as ChannelInfoMsg | LoopTickMsg;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "channelInfo") {
+        if (typeof msg.sampleRate === "number") sampleRateRef.current = msg.sampleRate;
         CHANNELS.forEach(name => {
-          const len = msg.lengths?.[name] ?? 0;
+          const len = (msg as ChannelInfoMsg).lengths?.[name] ?? 0;
           dataLenRef.current[name] = len;
-          const an = analyzersRef.current[name];
-          if (an && len > 0) {
-            const want = nearestPow2(len);
-            if (an.fftSize !== want) {
+        });
+        // Unify fftSize across channels based on reference channel length for consistent indexing
+        const refLen = (msg as ChannelInfoMsg).lengths?.["screenX"] ?? 0;
+        if (refLen > 0) {
+          const want = nearestPow2(refLen);
+          CHANNELS.forEach(name => {
+            const an = analyzersRef.current[name];
+            if (an && an.fftSize !== want) {
               an.fftSize = want;
               an.smoothingTimeConstant = 0;
             }
-          }
-        });
+          });
+        }
+      } else if (msg.type === "loopTick") {
+        lastTickTimeRef.current = msg.t;
+        // Also refresh lengths if provided
+        if (msg.lengths) {
+          CHANNELS.forEach(name => {
+            dataLenRef.current[name] = msg.lengths?.[name] ?? dataLenRef.current[name] ?? 0;
+          });
+        }
       }
     };
     audioWorkletNode.port.addEventListener("message", handler as EventListener);
@@ -166,7 +183,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     refLinesGeom.current.setAttribute("position", new Float32BufferAttribute(positions, 3));
     (refLinesGeom.current.getAttribute("position") as Float32BufferAttribute).needsUpdate = true;
     if (!refLinesMat.current) refLinesMat.current = new LineBasicMaterial({ color: 0x444444 });
-  }, [rows, width, rowHeight, totalHeight]);
+  }, [rows, width, rowHeight, totalHeight, audioContext]);
 
   // Draw/update waveforms into consolidated geometry using RAF
   const draw = useCallback(() => {
@@ -174,6 +191,41 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     const colorsArrays: number[][] = [];
     let totalSegments = 0;
     const drawWidth = Math.max(2, width);
+
+    // Establish a single reference start aligned to the loop using screenX
+    const refAn = analyzersRef.current["screenX"];
+    let refStart = 0;
+    let refWindowLen = 0;
+    let bufferLengthCommon = 0;
+    if (refAn) {
+      const bufferLength = refAn.fftSize;
+      bufferLengthCommon = bufferLength;
+      const timeData = new Uint8Array(bufferLength);
+      refAn.getByteTimeDomainData(timeData);
+      const loopLen = dataLenRef.current["screenX"] || 0;
+      // Choose window len: exact loop length if known and <= buffer, else fallback
+      refWindowLen = Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
+      if (refWindowLen > 0) {
+        const tick = lastTickTimeRef.current;
+        const sr = sampleRateRef.current;
+        if (tick != null && audioContext) {
+          const dt = Math.max(0, audioContext.currentTime - tick);
+          const samplesSinceTick = Math.floor((dt * sr) % Math.max(1, loopLen || refWindowLen));
+          // Index of tick sample in buffer (newest is bufferLength-1)
+          const idxTick = (bufferLength - 1 - samplesSinceTick + bufferLength) % bufferLength;
+          refStart = idxTick;
+        } else {
+          // Fallback to trigger on reference channel
+          const searchEnd = bufferLength;
+          const searchStart = Math.max(0, searchEnd - refWindowLen - 64);
+          const trig = findTriggerIndex(timeData, searchStart, searchEnd);
+          let start = trig ?? bufferLength - refWindowLen;
+          if (start + refWindowLen > bufferLength) start = bufferLength - refWindowLen;
+          if (start < 0) start = 0;
+          refStart = start;
+        }
+      }
+    }
 
     rows.forEach((row, idx) => {
       const name = row.key as ChannelName;
@@ -183,19 +235,19 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       const timeData = new Uint8Array(bufferLength);
       an.getByteTimeDomainData(timeData);
       const loopLen = dataLenRef.current[name] || 0;
-      // Fallback: if loop length not known yet, draw a recent window
-      const windowLen = Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
+      const windowLen = refWindowLen || Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
       if (windowLen <= 0) {
         positionsArrays.push([]);
         colorsArrays.push([]);
         return;
       }
-      const searchEnd = bufferLength;
-      const searchStart = Math.max(0, searchEnd - windowLen - 64);
-      const trigger = findTriggerIndex(timeData, searchStart, searchEnd);
-      let start = trigger ?? bufferLength - windowLen;
-      if (start + windowLen > bufferLength) start = bufferLength - windowLen;
-      if (start < 0) start = 0;
+      // Use reference start for all channels to keep them phase-aligned
+      let start = refStart;
+      if (!refAn || bufferLength !== bufferLengthCommon) {
+        // If for some reason buffer lengths differ, clamp
+        if (start + windowLen > bufferLength) start = bufferLength - windowLen;
+        if (start < 0) start = 0;
+      }
 
       const centerY = totalHeight / 2 - rowHeight / 2 - idx * rowHeight;
       const halfHeight = (rowHeight - 20) / 2;
@@ -207,8 +259,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
         cb = c.b;
 
       for (let i = 0; i < windowLen - 1; i++) {
-        const a = timeData[start + i];
-        const b = timeData[start + i + 1];
+        const a = timeData[(start + i) % bufferLength];
+        const b = timeData[(start + i + 1) % bufferLength];
         const va = (a - 128) / 128;
         const vb = (b - 128) / 128;
         const vaNorm = name === "r" || name === "g" || name === "b" ? (va + 1) / 2 : va;
@@ -256,7 +308,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     }
 
     rafRef.current = requestAnimationFrame(draw);
-  }, [rows, width, rowHeight, totalHeight]);
+  }, [rows, width, rowHeight, totalHeight, audioContext]);
 
   useEffect(() => {
     const cleanup = initAnalyzers();
