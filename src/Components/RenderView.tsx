@@ -47,7 +47,7 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
     // Create analyzer for each channel - similar to Reactoscope pattern
     channelNames.forEach((channelName, index) => {
       const analyzer = audioContext.createAnalyser();
-      analyzer.fftSize = 64; // Higher resolution for time domain analysis
+      analyzer.fftSize = 64; 
       analyzer.smoothingTimeConstant = 0.0; // No smoothing for direct reconstruction
       analyzer.minDecibels = -90;
       analyzer.maxDecibels = -10;
