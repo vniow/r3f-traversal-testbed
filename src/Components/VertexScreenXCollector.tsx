@@ -5,6 +5,7 @@ import { collectVertexScreenData } from "./vertexScreenUtils";
 export function VertexScreenXCollector({
   objects,
   setVertexData,
+  interpolatedIntensity,
 }: {
   objects: ObjectWithVertices[];
   setVertexData: (data: {
@@ -16,11 +17,12 @@ export function VertexScreenXCollector({
     b: number[];
     source: ("object" | "interpolated")[];
   }) => void;
+  interpolatedIntensity?: number;
 }) {
   const { camera } = useThree();
 
   useFrame(() => {
-    const { data, source } = collectVertexScreenData(objects, camera);
+    const { data, source } = collectVertexScreenData(objects, camera, { interpolatedIntensity });
 
     // Extract all values into separate arrays
     const vertexData = {

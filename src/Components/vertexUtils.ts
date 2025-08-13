@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Vector3 } from "three";
-import { useThree, useFrame } from "@react-three/fiber";
+
+import { useFrame } from "@react-three/fiber";
 
 // Type for objects with vertices
 export type ObjectWithVertices = {
@@ -105,44 +105,26 @@ export function useVertexTraversal(objects: ObjectWithVertices[]) {
 }
 
 // Utility to log world and screen coordinates for each vertex of each object, on every frame
-export function useLogVertices(objects: ObjectWithVertices[]) {
-  const { camera } = useThree();
+// export function useLogVertices(objects: ObjectWithVertices[]) {
+//   const { camera } = useThree();
 
-  // Helper to create the vertex info object
-  function getVertexInfo(objName: string, idx: number, p: [number, number, number], color: [number, number, number], label = "vertex") {
-    const v = new Vector3(...p);
-    const projected = v.clone().project(camera);
-    // Normalized device coordinates (NDC) are already in [-1, 1] for x and y
-    // We'll keep the sign for y (no flip)
-    return {
-      object: objName,
-      label,
-      index: idx,
-      x: p[0],
-      y: p[1],
-      z: p[2],
-      r: color[0],
-      g: color[1],
-      b: color[2],
-      screen: { x: projected.x, y: projected.y },
-    };
-  }
-
-  useFrame(() => {
-    // Log all object vertices
-    objects.forEach(obj => {
-      obj.points.forEach((p, i) => {
-        const color = obj.colors[i] || [1, 1, 1];
-        const info = getVertexInfo(obj.name, i, p, color);
-        // console.log(info);
-      });
-    });
-
-    // Log interpolated points between each object (from last vertex of one to first of next)
-    const interpPoints = getInterpolatedPoints(objects);
-    interpPoints.forEach((pt, i) => {
-      const info = getVertexInfo("interp", i, pt.position, pt.color, "interp");
-      //   console.log(info);
-    });
-  });
-}
+//   // Helper to create the vertex info object
+//   // function getVertexInfo(objName: string, idx: number, p: [number, number, number], color: [number, number, number], label = "vertex") {
+//   //   const v = new Vector3(...p);
+//   //   const projected = v.clone().project(camera);
+//   //   // Normalized device coordinates (NDC) are already in [-1, 1] for x and y
+//   //   // We'll keep the sign for y (no flip)
+//   //   return {
+//   //     object: objName,
+//   //     label,
+//   //     index: idx,
+//   //     x: p[0],
+//   //     y: p[1],
+//   //     z: p[2],
+//   //     r: color[0],
+//   //     g: color[1],
+//   //     b: color[2],
+//   //     screen: { x: projected.x, y: projected.y },
+//   //   };
+//   // }
+// }

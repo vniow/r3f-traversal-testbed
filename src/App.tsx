@@ -11,7 +11,7 @@ import { SceneView } from "./Components/SceneView";
 import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
-import { WorkletWaveform } from "./Components/WorkletWaveform";
+import { WorkletGraphView } from "./Components/WorkletGraphView";
 // import { LoopOutputWaveform } from "./Components/LoopOutputWaveform";
 
 const objects: ObjectWithVertices[] = [
@@ -34,6 +34,7 @@ const objects: ObjectWithVertices[] = [
 ];
 
 function App() {
+  const [interpolatedIntensity, setInterpolatedIntensity] = useState<number>(0);
   const [vertexData, setVertexData] = useState<{
     screenX: number[];
     screenY: number[];
@@ -96,20 +97,22 @@ function App() {
               isPlaying={isPlaying}
               globalGain={globalGain}
               channelGains={channelGains}
+              interpolatedIntensity={interpolatedIntensity}
               onInitialize={initializeAudio}
               onTogglePlayback={togglePlayback}
               onSetGlobalGain={setGlobalGain}
               onSetChannelGain={setChannelGain}
+              onSetInterpolatedIntensity={setInterpolatedIntensity}
             />
           </div>
           <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <SceneView objects={objects} setVertexData={setVertexData} />
+            <SceneView objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
           </div>
           <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
             <RenderView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
           </div>
           <div style={{ width: 256, minWidth: 256 }}>
-            <WorkletWaveform audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
+            <WorkletGraphView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
           </div>
         </div>
       </div>

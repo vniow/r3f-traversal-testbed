@@ -4,7 +4,6 @@ import { useLayoutEffect } from "react";
 import { Color } from "three";
 import Triangle from "./Triangle";
 import Square from "./Square";
-import { useLogVertices } from "./vertexUtils";
 import { InterpolatedPoints } from "./useLogVertices";
 import type { ObjectWithVertices } from "./vertexUtils";
 import Polygon from "./Polygon";
@@ -22,6 +21,7 @@ interface SceneViewProps {
     b: number[];
     source?: ("object" | "interpolated")[];
   }) => void;
+  interpolatedIntensity?: number;
 }
 
 function SceneBackground() {
@@ -33,7 +33,6 @@ function SceneBackground() {
 }
 
 function SceneWithLogging({ objects }: { objects: ObjectWithVertices[] }) {
-  useLogVertices(objects);
   return (
     <>
       <SceneBackground />
@@ -47,11 +46,11 @@ function SceneWithLogging({ objects }: { objects: ObjectWithVertices[] }) {
   );
 }
 
-export function SceneView({ objects, setVertexData }: SceneViewProps) {
+export function SceneView({ objects, setVertexData, interpolatedIntensity }: SceneViewProps) {
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
-      <VertexScreenXCollector objects={objects} setVertexData={setVertexData} />
+      <VertexScreenXCollector objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
       <SceneWithLogging objects={objects} />
     </View>
   );

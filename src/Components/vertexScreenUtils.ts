@@ -17,7 +17,8 @@ export interface VertexScreenData {
 // Now also returns a source array: 'object' | 'interpolated' for each point
 export function collectVertexScreenData(
   objects: ObjectWithVertices[],
-  camera: Camera
+  camera: Camera,
+  options?: { interpolatedIntensity?: number }
 ): { data: VertexScreenData[]; source: ("object" | "interpolated")[] } {
   let verts: [number, number, number][] = [];
   let colors: [number, number, number][] = [];
@@ -48,12 +49,13 @@ export function collectVertexScreenData(
   }
 
   // Project to screen space and collect all values
+  const interpI = Math.max(0, Math.min(1, options?.interpolatedIntensity ?? 0));
   const data = verts.map((p, i) => {
     const v = new Vector3(...p);
     const projected = v.project(camera);
     const color = colors[i] || [1, 1, 1];
-    // Intensity rule: object vertices full intensity (1), interpolated vertices blanked (0)
-    const intensity = source[i] === "interpolated" ? 0 : 1;
+    // Intensity rule: object vertices full intensity (1), interpolated vertices use adjustable intensity
+    const intensity = source[i] === "interpolated" ? interpI : 1;
     return {
       screenX: projected.x,
       screenY: projected.y,
