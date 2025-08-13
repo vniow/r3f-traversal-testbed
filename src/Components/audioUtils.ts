@@ -48,7 +48,7 @@ export class VertexAudioEngine {
       });
 
       // Connect to audio context destination so downstream analyzers can pull audio
-      this.audioWorkletNode.connect(this.audioContext.destination);
+      // this.audioWorkletNode.connect(this.audioContext.destination);
 
       this.isInitialized = true;
     } catch (error) {

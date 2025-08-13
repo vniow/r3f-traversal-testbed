@@ -12,7 +12,6 @@ import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
 import { WorkletGraphView } from "./Components/WorkletGraphView";
-// import { LoopOutputWaveform } from "./Components/LoopOutputWaveform";
 
 const objects: ObjectWithVertices[] = [
   {
@@ -66,8 +65,6 @@ function App() {
     setChannelGain,
     audioContext,
     audioWorkletNode,
-    // dataForRender,
-    // loopTick,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes

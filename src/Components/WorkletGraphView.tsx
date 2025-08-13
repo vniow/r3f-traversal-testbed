@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, OrthographicCamera } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useCallback } from "react";
 import { BufferGeometry, Color, Float32BufferAttribute, LineBasicMaterial, LineSegments } from "three";
@@ -61,6 +61,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(600);
   const rowHeight = 120;
+  // Phase shift fraction (-1 .. 1) applied to the reference window length
+  const [phaseShift, setPhaseShift] = useState<number>(0);
 
   // Analyzer plumbing
   const analyzersRef = useRef<Record<ChannelName, AnalyserNode>>({} as Record<ChannelName, AnalyserNode>);
@@ -75,6 +77,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   const refLinesMat = useRef<LineBasicMaterial | null>(null);
   const waveformGeom = useRef<BufferGeometry | null>(null);
   const waveformMat = useRef<LineBasicMaterial | null>(null);
+  const loopMarkerGeom = useRef<BufferGeometry | null>(null);
+  const loopMarkerMat = useRef<LineBasicMaterial | null>(null);
 
   const rows = useMemo(() => CHANNELS.map(ch => ({ key: ch, label: ch, color: CHANNEL_COLORS[ch] })), []);
   const totalHeight = rows.length * rowHeight;
@@ -191,13 +195,14 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     const colorsArrays: number[][] = [];
     let totalSegments = 0;
     const drawWidth = Math.max(2, width);
+    const markerPositions: number[] = [];
 
     // Establish a single reference start aligned to the loop using screenX
     const refAn = analyzersRef.current["screenX"];
     let refStart = 0;
     let refWindowLen = 0;
     let bufferLengthCommon = 0;
-    if (refAn) {
+  if (refAn) {
       const bufferLength = refAn.fftSize;
       bufferLengthCommon = bufferLength;
       const timeData = new Uint8Array(bufferLength);
@@ -227,7 +232,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       }
     }
 
-    rows.forEach((row, idx) => {
+  rows.forEach((row, idx) => {
       const name = row.key as ChannelName;
       const an = analyzersRef.current[name];
       if (!an) return;
@@ -249,8 +254,29 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
         if (start < 0) start = 0;
       }
 
+      // Apply phase shift (cyclic) relative to window length
+      if (windowLen > 0 && phaseShift !== 0) {
+        const shiftSamples = Math.round(phaseShift * windowLen);
+        start = (start + shiftSamples + bufferLength) % bufferLength;
+      }
+
       const centerY = totalHeight / 2 - rowHeight / 2 - idx * rowHeight;
       const halfHeight = (rowHeight - 20) / 2;
+
+      // Build loop-start marker position (from reference window/phase) once per row
+      if (refWindowLen > 1) {
+        const shiftSamples = Math.round(phaseShift * refWindowLen);
+        const relIndex = ((-shiftSamples % refWindowLen) + refWindowLen) % refWindowLen; // where tick falls inside window after phase shift
+        const markerX = (relIndex / Math.max(1, refWindowLen - 1)) * drawWidth - drawWidth / 2;
+        markerPositions.push(
+          markerX,
+          centerY - halfHeight,
+          0,
+          markerX,
+          centerY + halfHeight,
+          0
+        );
+      }
       const rowPositions: number[] = [];
       const rowColors: number[] = [];
       const c = new Color(row.color);
@@ -307,8 +333,20 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       if (!waveformMat.current) waveformMat.current = new LineBasicMaterial({ vertexColors: true, linewidth: 2 });
     }
 
+    // Update loop-start marker geometry
+    if (markerPositions.length > 0) {
+      const markerArray = new Float32Array(markerPositions.length);
+      markerArray.set(markerPositions);
+      if (!loopMarkerGeom.current) loopMarkerGeom.current = new BufferGeometry();
+      loopMarkerGeom.current.setAttribute("position", new Float32BufferAttribute(markerArray, 3));
+      (loopMarkerGeom.current.getAttribute("position") as Float32BufferAttribute).needsUpdate = true;
+      if (!loopMarkerMat.current) loopMarkerMat.current = new LineBasicMaterial({ color: 0xffff00 });
+    } else {
+      loopMarkerGeom.current = null;
+    }
+
     rafRef.current = requestAnimationFrame(draw);
-  }, [rows, width, rowHeight, totalHeight, audioContext]);
+  }, [rows, width, rowHeight, totalHeight, audioContext, phaseShift]);
 
   useEffect(() => {
     const cleanup = initAnalyzers();
@@ -324,6 +362,33 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
 
   return (
     <div style={{ ...GraphViewStyle, position: "relative" }} ref={containerRef}>
+      {/* Phase shift control */}
+      <div style={{ position: "sticky", top: 0, background: "#111", paddingBottom: 8, zIndex: 10 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#ccc" }}>
+          <span>Phase Shift ({(phaseShift * 100).toFixed(1)}%)</span>
+          <input
+            type="range"
+            min={-1}
+            max={1}
+            step={0.001}
+            value={phaseShift}
+            onChange={e => setPhaseShift(parseFloat(e.target.value))}
+            style={{ width: "100%" }}
+            aria-label="Phase shift"
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#666" }}>
+            <span>-100%</span>
+            <button
+              type="button"
+              onClick={() => setPhaseShift(0)}
+              style={{ cursor: "pointer", background: "#222", color: "#ccc", border: "1px solid #333", padding: "2px 6px", fontSize: 10 }}
+            >
+              Reset
+            </button>
+            <span>+100%</span>
+          </div>
+        </label>
+      </div>
       {rows.map((r, idx) => (
         <div
           key={r.key + "-label"}
@@ -346,6 +411,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
         <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={1} />
         {refLinesGeom.current && refLinesMat.current && <primitive object={new LineSegments(refLinesGeom.current, refLinesMat.current)} />}
         {waveformGeom.current && waveformMat.current && <primitive object={new LineSegments(waveformGeom.current, waveformMat.current)} />}
+  {loopMarkerGeom.current && loopMarkerMat.current && <primitive object={new LineSegments(loopMarkerGeom.current, loopMarkerMat.current)} />}
       </View>
       <div style={{ height: totalHeight }} />
     </div>
