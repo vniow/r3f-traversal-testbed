@@ -30,27 +30,42 @@ export class VertexAudioEngine {
   private lastVertexData: VertexAudioData | null = null;
   private channelGains: Record<string, number> = {};
   private globalGain: number = 1;
+  private _requestedSampleRate: number = 48000;
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+  async initialize(sampleRate: number = this._requestedSampleRate): Promise<void> {
+    if (this.isInitialized && this.audioContext && this.audioContext.sampleRate === sampleRate) return;
 
+    // If already initialized but sample rate differs, reinitialize
+    if (this.isInitialized && this.audioContext && this.audioContext.sampleRate !== sampleRate) {
+      await this.setSampleRate(sampleRate);
+      return;
+    }
+
+    this._requestedSampleRate = sampleRate;
     try {
-      this.audioContext = new AudioContext();
+      this.audioContext = new AudioContext({ sampleRate });
 
-      // Load the AudioWorklet processor
       await this.audioContext.audioWorklet.addModule("/vertexAudioProcessor.js");
 
-      // Create the AudioWorklet node with 6 output channels
       this.audioWorkletNode = new AudioWorkletNode(this.audioContext, "vertex-audio-processor", {
         numberOfInputs: 0,
         numberOfOutputs: 1,
-        outputChannelCount: [6], // 6-channel output
+        outputChannelCount: [6],
       });
 
-      // Connect to audio context destination so downstream analyzers can pull audio
-      // this.audioWorkletNode.connect(this.audioContext.destination);
-
       this.isInitialized = true;
+      // Reapply state if we already had some
+      this.audioWorkletNode.port.postMessage({ type: "setGlobalGain", gain: this.globalGain });
+      Object.entries(this.channelGains).forEach(([channel, gain]) => {
+        this.audioWorkletNode?.port.postMessage({ type: "setChannelGain", channel, gain });
+      });
+      if (this.lastVertexData) {
+        this.audioWorkletNode.port.postMessage({ type: "updateVertexData", vertexData: this.lastVertexData });
+      }
+      if (this.isPlaying) {
+        // If we were playing before init call (unlikely), ensure playback flag is set
+        this.audioWorkletNode.port.postMessage({ type: "setPlaying", playing: true });
+      }
     } catch (error) {
       console.error("Failed to initialize vertex audio engine:", error);
       throw error;
@@ -119,6 +134,48 @@ export class VertexAudioEngine {
     this.isInitialized = false;
   }
 
+  async setSampleRate(sampleRate: number): Promise<void> {
+    // Always store requested sample rate
+    this._requestedSampleRate = sampleRate;
+
+    // If not yet initialized just record desired sample rate; actual init happens later
+    if (!this.isInitialized || !this.audioContext) {
+      return;
+    }
+
+    if (this.audioContext.sampleRate === sampleRate) return; // no-op
+    const wasPlaying = this.isPlaying;
+    // Preserve state
+    const lastData = this.lastVertexData;
+    const gains = { ...this.channelGains };
+    const global = this.globalGain;
+
+    // Tear down old context
+    this.audioWorkletNode?.disconnect();
+    if (this.audioContext) {
+      try {
+        await this.audioContext.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.isInitialized = false;
+    this.isPlaying = false;
+
+    // Set requested sample rate and reinitialize
+    await this.initialize(sampleRate);
+
+    // Restore state (initialize already reapplied gains & data if present)
+    this.globalGain = global; // ensure property stays
+    this.channelGains = gains; // ensure property stays
+    if (lastData) {
+      this.updateVertexData(lastData);
+    }
+    if (wasPlaying) {
+      await this.start();
+    }
+  }
+
   get playing(): boolean {
     return this.isPlaying;
   }
@@ -129,6 +186,14 @@ export class VertexAudioEngine {
 
   get workletNode(): AudioWorkletNode | null {
     return this.audioWorkletNode;
+  }
+
+  get sampleRate(): number | null {
+    return this.audioContext?.sampleRate || this._requestedSampleRate || null;
+  }
+
+  get requestedSampleRate(): number {
+    return this._requestedSampleRate;
   }
 
   // For renderers that need the exact data being played

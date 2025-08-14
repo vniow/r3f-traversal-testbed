@@ -38,22 +38,43 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
   const initializeAnalyzers = useCallback(() => {
     if (!audioContext || !audioWorkletNode) return;
 
+    // If existing analyzers belong to a different context, clear them
+    if (analyzersRef.current && Object.keys(analyzersRef.current).length > 0) {
+      analyzersRef.current = {};
+    }
+
     const channelNames = ["screenX", "screenY", "screenZ", "r", "g", "b"];
 
     // Create a channel splitter to separate the 6-channel audio
-    const splitter = audioContext.createChannelSplitter(6);
-    audioWorkletNode.connect(splitter);
+    let splitter: ChannelSplitterNode | null = null;
+    try {
+      // Guard: only connect if same context
+      if (audioWorkletNode.context !== audioContext) {
+        return; // stale props; ignore
+      }
+      splitter = audioContext.createChannelSplitter(6);
+      audioWorkletNode.connect(splitter);
+    } catch {
+      console.warn("Failed to connect audio worklet to splitter (possibly context mismatch)");
+      return;
+    }
 
     // Create analyzer for each channel - similar to Reactoscope pattern
     channelNames.forEach((channelName, index) => {
       const analyzer = audioContext.createAnalyser();
-      analyzer.fftSize = 64; 
+      analyzer.fftSize = 1024;
       analyzer.smoothingTimeConstant = 0.0; // No smoothing for direct reconstruction
       analyzer.minDecibels = -90;
       analyzer.maxDecibels = -10;
 
       // Connect the specific channel to its analyzer
-      splitter.connect(analyzer, index);
+      if (splitter) {
+        try {
+          splitter.connect(analyzer, index);
+        } catch {
+          // Skip this analyzer if connect fails
+        }
+      }
 
       analyzersRef.current[channelName] = analyzer;
     });
@@ -82,7 +103,7 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
       analyzer.getByteTimeDomainData(dataArray);
 
       // Sample the data similar to Reactoscope WaveScreen sampling pattern
-      const width = 128; // Number of points for visualization
+      const width = 1024; // Number of points for visualization
       const step = bufferLength / width;
       const sampledData: number[] = [];
 
@@ -122,18 +143,15 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
 
   // Initialize analyzers when audio context and worklet are available
   useEffect(() => {
-    if (audioContext && audioWorkletNode) {
-      initializeAnalyzers();
-
-      // Start the analysis animation loop
-      animate();
-
-      return () => {
-        if (animationFrameRef.current !== null) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-      };
-    }
+    if (!audioContext || !audioWorkletNode) return;
+    initializeAnalyzers();
+    animate();
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      analyzersRef.current = {};
+    };
   }, [audioContext, audioWorkletNode, initializeAnalyzers, animate]);
 
   // Map vertex data into beam line geometry + intensity attribute

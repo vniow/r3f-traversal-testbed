@@ -65,6 +65,8 @@ function App() {
     setChannelGain,
     audioContext,
     audioWorkletNode,
+    sampleRate,
+    setSampleRate,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes
@@ -95,11 +97,13 @@ function App() {
               globalGain={globalGain}
               channelGains={channelGains}
               interpolatedIntensity={interpolatedIntensity}
+              sampleRate={sampleRate}
               onInitialize={initializeAudio}
               onTogglePlayback={togglePlayback}
               onSetGlobalGain={setGlobalGain}
               onSetChannelGain={setChannelGain}
               onSetInterpolatedIntensity={setInterpolatedIntensity}
+              onSetSampleRate={setSampleRate}
             />
           </div>
           <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>

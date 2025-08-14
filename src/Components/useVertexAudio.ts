@@ -10,6 +10,7 @@ export function useVertexAudio() {
     Object.fromEntries(Object.entries(AUDIO_CHANNELS).map(([key, config]) => [key, config.gain]))
   );
   const [loopTick, setLoopTick] = useState<{ t: number; lengths: Record<string, number> } | null>(null);
+  const [sampleRate, setSampleRateState] = useState<number>(48000);
 
   // Initialize audio engine
   const initializeAudio = useCallback(async () => {
@@ -18,12 +19,12 @@ export function useVertexAudio() {
     }
 
     try {
-      await audioEngineRef.current.initialize();
+      await audioEngineRef.current.initialize(sampleRate);
       setIsInitialized(true);
     } catch (error) {
       console.error("Failed to initialize audio:", error);
     }
-  }, []);
+  }, [sampleRate]);
 
   // Update vertex data in audio engine
   const updateVertexData = useCallback((vertexData: VertexAudioData) => {
@@ -53,6 +54,17 @@ export function useVertexAudio() {
   const setChannelGain = useCallback((channel: string, gain: number) => {
     setChannelGains(prev => ({ ...prev, [channel]: gain }));
     audioEngineRef.current?.setChannelGain(channel, gain);
+  }, []);
+
+  // Change sample rate (will reinitialize context)
+  const setSampleRate = useCallback(async (rate: number) => {
+    setSampleRateState(rate);
+    // If engine exists & initialized, request live sample rate switch (will re-init internally)
+    if (audioEngineRef.current && audioEngineRef.current.context) {
+      await audioEngineRef.current.setSampleRate(rate);
+      setIsInitialized(true);
+    }
+    // Otherwise we just stored rate; will be used on first initializeAudio call
   }, []);
 
   // Cleanup on unmount
@@ -95,5 +107,7 @@ export function useVertexAudio() {
     audioWorkletNode: audioEngineRef.current?.workletNode || null,
     dataForRender: audioEngineRef.current?.dataForRender || null,
     loopTick,
+    sampleRate,
+    setSampleRate,
   };
 }
