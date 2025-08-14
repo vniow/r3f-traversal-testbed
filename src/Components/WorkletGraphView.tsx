@@ -67,6 +67,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
   const [fixedOffsetMode, setFixedOffsetMode] = useState<boolean>(false);
   // Optional fractional offset (0..1) shifts tick within window when in fixed mode
   const [fixedOffsetFrac, setFixedOffsetFrac] = useState<number>(0); // 0 = tick at left edge
+  // Horizontal zoom: 1 = base window, >1 zooms in (fewer samples), <1 zooms out (more samples if available)
+  const [hZoom, setHZoom] = useState<number>(1);
 
   // Analyzer plumbing
   const analyzersRef = useRef<Record<ChannelName, AnalyserNode>>({} as Record<ChannelName, AnalyserNode>);
@@ -204,7 +206,8 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     // Establish a single reference start aligned to the loop using screenX
     const refAn = analyzersRef.current["screenX"];
     let refStart = 0;
-    let refWindowLen = 0;
+    let refWindowLen = 0; // base (un-zoomed) window length in samples
+    let refDisplayLen = 0; // actual displayed window length after zoom
     let bufferLengthCommon = 0;
   if (refAn) {
       const bufferLength = refAn.fftSize;
@@ -214,6 +217,16 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       const loopLen = dataLenRef.current["screenX"] || 0;
       // Choose window len: exact loop length if known and <= buffer, else fallback
       refWindowLen = Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
+      // Apply horizontal zoom to determine displayed length ( clamp >= 8 for readability )
+      if (refWindowLen > 0) {
+        if (hZoom >= 1) {
+          refDisplayLen = Math.max(8, Math.round(refWindowLen / hZoom));
+        } else {
+          // zooming out: attempt to include more samples up to buffer length
+          const target = Math.round(refWindowLen / Math.max(0.001, hZoom));
+            refDisplayLen = Math.min(bufferLength, Math.max(refWindowLen, target));
+        }
+      }
       if (refWindowLen > 0) {
         const tick = lastTickTimeRef.current;
         const sr = sampleRateRef.current;
@@ -252,7 +265,9 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       const timeData = new Uint8Array(bufferLength);
       an.getByteTimeDomainData(timeData);
       const loopLen = dataLenRef.current[name] || 0;
-      const windowLen = refWindowLen || Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
+      const baseLen = refWindowLen || Math.max(0, Math.min(bufferLength, loopLen > 1 ? loopLen : Math.min(bufferLength, 512)));
+      // Use reference display length if we have one, else derive from baseLen (no zoom)
+      const windowLen = refDisplayLen || baseLen;
       if (windowLen <= 0) {
         positionsArrays.push([]);
         colorsArrays.push([]);
@@ -276,10 +291,11 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
       const halfHeight = (rowHeight - 20) / 2;
 
       // Build loop-start marker position (from reference window/phase) once per row
-      if (refWindowLen > 1) {
-        const shiftSamples = Math.round(phaseShift * refWindowLen);
-        const relIndex = ((-shiftSamples % refWindowLen) + refWindowLen) % refWindowLen; // where tick falls inside window after phase shift
-        const markerX = (relIndex / Math.max(1, refWindowLen - 1)) * drawWidth - drawWidth / 2;
+      if (refDisplayLen > 1) {
+        // Marker position relative to displayed window length (after zoom)
+        const shiftSamples = Math.round(phaseShift * (refDisplayLen));
+        const relIndex = ((-shiftSamples % refDisplayLen) + refDisplayLen) % refDisplayLen; // where tick falls inside window after phase shift
+        const markerX = (relIndex / Math.max(1, refDisplayLen - 1)) * drawWidth - drawWidth / 2;
         markerPositions.push(
           markerX,
           centerY - halfHeight,
@@ -358,7 +374,7 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
     }
 
     rafRef.current = requestAnimationFrame(draw);
-  }, [rows, width, rowHeight, totalHeight, audioContext, phaseShift, fixedOffsetMode, fixedOffsetFrac]);
+  }, [rows, width, rowHeight, totalHeight, audioContext, phaseShift, fixedOffsetMode, fixedOffsetFrac, hZoom]);
 
   useEffect(() => {
     const cleanup = initAnalyzers();
@@ -428,6 +444,29 @@ export function WorkletGraphView({ audioContext, audioWorkletNode }: WorkletGrap
               Reset
             </button>
             <span>+100%</span>
+          </div>
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#ccc" }}>
+          <span>Horizontal Zoom ({hZoom.toFixed(2)}x)</span>
+          <input
+            type="range"
+            min={0.25}
+            max={40}
+            step={0.01}
+            value={hZoom}
+            onChange={e => setHZoom(parseFloat(e.target.value))}
+            aria-label="Horizontal zoom"
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#666" }}>
+            <span>0.25x</span>
+            <button
+              type="button"
+              onClick={() => setHZoom(1)}
+              style={{ cursor: "pointer", background: "#222", color: "#ccc", border: "1px solid #333", padding: "2px 6px", fontSize: 10 }}
+            >
+              1x
+            </button>
+            <span>40x</span>
           </div>
         </label>
       </div>
