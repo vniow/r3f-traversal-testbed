@@ -6,34 +6,23 @@ import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
 import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
 import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import GraphView from "./Components/GraphView";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SceneView } from "./Components/SceneView";
 import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
 import { WorkletGraphView } from "./Components/WorkletGraphView";
+import { generateRegularPolygon } from "./Components/generatePolygon";
 
-const objects: ObjectWithVertices[] = [
-  {
-    name: "Triangle",
-    points: TRIANGLE_POINTS,
-    colors: TRIANGLE_COLORS,
-  },
-  {
-    name: "Square",
-    points: SQUARE_POINTS,
-    colors: SQUARE_COLORS,
-  },
-
-  {
-    name: "Polygon",
-    points: POLYGON_POINTS,
-    colors: POLYGON_COLORS,
-  },
+const staticObjects: ObjectWithVertices[] = [
+  { name: "Triangle", points: TRIANGLE_POINTS, colors: TRIANGLE_COLORS },
+  { name: "Square", points: SQUARE_POINTS, colors: SQUARE_COLORS },
+  { name: "Polygon", points: POLYGON_POINTS, colors: POLYGON_COLORS },
 ];
 
 function App() {
   const [interpolatedIntensity, setInterpolatedIntensity] = useState<number>(0);
+  const [dynamicObjects, setDynamicObjects] = useState<ObjectWithVertices[]>([]);
   const [vertexData, setVertexData] = useState<{
     screenX: number[];
     screenY: number[];
@@ -51,6 +40,12 @@ function App() {
     b: [],
     source: [],
   });
+
+  const allObjects = [...staticObjects, ...dynamicObjects];
+
+  const handleAddPolygon = useCallback(() => {
+    setDynamicObjects(prev => [...prev, generateRegularPolygon()]);
+  }, []);
 
   // Audio synthesis hook
   const {
@@ -105,10 +100,27 @@ function App() {
               onSetInterpolatedIntensity={setInterpolatedIntensity}
               onSetSampleRate={setSampleRate}
             />
+            <div style={{ marginTop: 16 }}>
+              <button
+                onClick={handleAddPolygon}
+                style={{
+                  padding: "6px 10px",
+                  background: "#333",
+                  color: "#fff",
+                  border: "1px solid #555",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  width: "100%",
+                  fontSize: 12,
+                }}
+              >
+                ➕ Add Polygon
+              </button>
+            </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-              <SceneView objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
+              <SceneView objects={allObjects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
             </div>
             <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
               <RenderView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />

@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 
 // Type for objects with vertices
 export type ObjectWithVertices = {
+  id?: string; // optional unique identifier for dynamic objects
   name: string;
   points: [number, number, number][];
   colors: [number, number, number][];
