@@ -106,11 +106,13 @@ function App() {
               onSetSampleRate={setSampleRate}
             />
           </div>
-          <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <SceneView objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
-          </div>
-          <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <RenderView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
+              <SceneView objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
+            </div>
+            <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
+              <RenderView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />
+            </div>
           </div>
           <div style={{ width: 256, minWidth: 256 }}>
             <WorkletGraphView audioContext={audioContext} audioWorkletNode={audioWorkletNode} />

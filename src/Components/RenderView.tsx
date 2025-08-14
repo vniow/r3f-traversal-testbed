@@ -1,5 +1,6 @@
 import { View, OrthographicCamera } from "@react-three/drei";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
+import { useThree } from "@react-three/fiber";
 import { Color } from "three";
 import Lights from "./Lights";
 import { BeamLine } from "./BeamLine";
@@ -20,6 +21,14 @@ interface RenderViewProps {
 }
 
 export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) {
+  // White background specific to the reconstructed render view
+  function WhiteBackground() {
+    const { scene } = useThree();
+    useLayoutEffect(() => {
+      scene.background = new Color("#ffffff");
+    }, [scene]);
+    return null;
+  }
   // Audio analyzers for each channel
   const analyzersRef = useRef<Record<string, AnalyserNode>>({});
   const animationFrameRef = useRef<number | null>(null);
@@ -224,6 +233,7 @@ export function RenderView({ audioContext, audioWorkletNode }: RenderViewProps) 
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
+  <WhiteBackground />
       <Lights />
       {/* Render line visualization using reconstructed vertex data from audio */}
       {beamSegments.map((seg, i) => (
