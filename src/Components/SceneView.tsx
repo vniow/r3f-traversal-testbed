@@ -2,7 +2,6 @@ import { View, OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useLayoutEffect } from "react";
 import { Color } from "three";
-import { InterpolatedPoints } from "./useLogVertices";
 import type { ObjectWithVertices } from "./vertexUtils";
 import { DynamicPolygon } from "./DynamicPolygon";
 import Lights from "./Lights";
@@ -35,11 +34,10 @@ function SceneWithLogging({ objects }: { objects: ObjectWithVertices[] }) {
     <>
       <SceneBackground />
       <Lights />
-      {/* Render all passed objects generically; keep legacy Triangle/Square filter if needed */}
       {objects.map(obj => (
         <DynamicPolygon key={obj.id ?? obj.name} object={obj} />
       ))}
-      <InterpolatedPoints objects={objects} />
+
       <OrbitControls makeDefault />
     </>
   );
