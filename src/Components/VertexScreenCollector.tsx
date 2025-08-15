@@ -2,7 +2,7 @@ import { useThree, useFrame } from "@react-three/fiber";
 import type { ObjectWithVertices } from "./vertexUtils";
 import { collectVertexScreenData } from "./vertexScreenUtils";
 
-export function VertexScreenXCollector({
+export function VertexScreenCollector({
   objects,
   setVertexData,
   interpolatedIntensity,

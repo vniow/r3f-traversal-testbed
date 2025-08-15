@@ -25,6 +25,11 @@ export const AUDIO_CHANNELS: Record<string, AudioChannelConfig> = {
 export class VertexAudioEngine {
   private audioContext: AudioContext | null = null;
   private audioWorkletNode: AudioWorkletNode | null = null;
+  // Stereo routing nodes for mixing screenX -> left, screenY -> right
+  private splitter: ChannelSplitterNode | null = null;
+  private merger: ChannelMergerNode | null = null;
+  private destinationGain: GainNode | null = null;
+  private destinationEnabled: boolean = true;
   private isInitialized = false;
   private isPlaying = false;
   private lastVertexData: VertexAudioData | null = null;
@@ -53,6 +58,10 @@ export class VertexAudioEngine {
         outputChannelCount: [6],
       });
 
+      // Set up main-thread stereo mix routing: take worklet outputs 0 (screenX) and 1 (screenY)
+      // and merge them into a 2-channel stereo signal that can be connected to destination.
+      this.setupStereoMix();
+
       this.isInitialized = true;
       // Reapply state if we already had some
       this.audioWorkletNode.port.postMessage({ type: "setGlobalGain", gain: this.globalGain });
@@ -69,6 +78,78 @@ export class VertexAudioEngine {
     } catch (error) {
       console.error("Failed to initialize vertex audio engine:", error);
       throw error;
+    }
+  }
+
+  // Create a ChannelSplitter -> ChannelMerger graph that routes output channel 0 -> left, 1 -> right
+  private setupStereoMix(): void {
+    if (!this.audioContext || !this.audioWorkletNode) return;
+
+    // Clean up any previous nodes
+    try {
+      this.audioWorkletNode.disconnect();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.splitter?.disconnect();
+      this.merger?.disconnect();
+      this.destinationGain?.disconnect();
+    } catch {
+      /* ignore */
+    }
+
+    this.splitter = this.audioContext.createChannelSplitter(6);
+    this.merger = this.audioContext.createChannelMerger(2);
+    this.destinationGain = this.audioContext.createGain();
+
+    // Default destination gain to unity
+    this.destinationGain.gain.value = 1;
+
+    // Connect worklet -> splitter
+    try {
+      this.audioWorkletNode.connect(this.splitter);
+    } catch {
+      /* Some contexts may throw if nodes are in odd states; ignore here */
+    }
+
+    // Route splitter output 0 (screenX) -> merger input 0 (left)
+    this.splitter.connect(this.merger, 0, 0);
+    // Route splitter output 1 (screenY) -> merger input 1 (right)
+    this.splitter.connect(this.merger, 1, 1);
+
+    // Merge -> destinationGain
+    this.merger.connect(this.destinationGain);
+
+    // Connect destinationGain to audioContext.destination if enabled
+    if (this.destinationEnabled) {
+      try {
+        this.destinationGain.connect(this.audioContext.destination);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // Toggle whether the stereo mix is connected to the context destination
+  public setDestinationEnabled(enabled: boolean): void {
+    this.destinationEnabled = !!enabled;
+    if (!this.audioContext || !this.destinationGain) return;
+    try {
+      if (this.destinationEnabled) {
+        this.destinationGain.connect(this.audioContext.destination);
+      } else {
+        // disconnect specific connection if possible
+        try {
+          this.destinationGain.disconnect(this.audioContext.destination);
+        } catch {
+          // fallback: mute
+          this.destinationGain.gain.value = 0;
+        }
+      }
+    } catch {
+      // As a safe fallback, set gain to 0/1
+      this.destinationGain.gain.value = this.destinationEnabled ? 1 : 0;
     }
   }
 
@@ -129,8 +210,23 @@ export class VertexAudioEngine {
 
   destroy(): void {
     this.stop();
-    this.audioWorkletNode?.disconnect();
-    this.audioContext?.close();
+    try {
+      this.audioWorkletNode?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.splitter?.disconnect();
+      this.merger?.disconnect();
+      this.destinationGain?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.audioContext?.close();
+    } catch {
+      /* ignore */
+    }
     this.isInitialized = false;
   }
 

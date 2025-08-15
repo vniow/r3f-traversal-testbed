@@ -6,7 +6,7 @@ import { InterpolatedPoints } from "./useLogVertices";
 import type { ObjectWithVertices } from "./vertexUtils";
 import { DynamicPolygon } from "./DynamicPolygon";
 import Lights from "./Lights";
-import { VertexScreenXCollector } from "./VertexScreenXCollector";
+import { VertexScreenCollector } from "./VertexScreenCollector";
 
 interface SceneViewProps {
   objects: ObjectWithVertices[];
@@ -49,7 +49,7 @@ export function SceneView({ objects, setVertexData, interpolatedIntensity }: Sce
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
-      <VertexScreenXCollector objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
+      <VertexScreenCollector objects={objects} setVertexData={setVertexData} interpolatedIntensity={interpolatedIntensity} />
       <SceneWithLogging objects={objects} />
     </View>
   );

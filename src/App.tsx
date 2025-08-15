@@ -2,9 +2,7 @@ import "./App.css";
 import { Canvas } from "@react-three/fiber";
 import { View } from "@react-three/drei";
 import type { ObjectWithVertices } from "./Components/vertexUtils";
-import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
-import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
-import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
+// import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import GraphView from "./Components/GraphView";
 import { useState, useEffect, useCallback } from "react";
 import { SceneView } from "./Components/SceneView";
@@ -14,11 +12,11 @@ import { RenderView } from "./Components/RenderView";
 import { WorkletGraphView } from "./Components/WorkletGraphView";
 import { generateRegularPolygon } from "./Components/generatePolygon";
 
-const staticObjects: ObjectWithVertices[] = [
-  { name: "Triangle", points: TRIANGLE_POINTS, colors: TRIANGLE_COLORS },
-  { name: "Square", points: SQUARE_POINTS, colors: SQUARE_COLORS },
-  { name: "Polygon", points: POLYGON_POINTS, colors: POLYGON_COLORS },
-];
+// const staticObjects: ObjectWithVertices[] = [
+//   // { name: "Triangle", points: TRIANGLE_POINTS, colors: TRIANGLE_COLORS },
+//   // { name: "Square", points: SQUARE_POINTS, colors: SQUARE_COLORS },
+//   // { name: "Polygon", points: POLYGON_POINTS, colors: POLYGON_COLORS },
+// ];
 
 function App() {
   const [interpolatedIntensity, setInterpolatedIntensity] = useState<number>(0);
@@ -41,7 +39,7 @@ function App() {
     source: [],
   });
 
-  const allObjects = [...staticObjects, ...dynamicObjects];
+  const allObjects = [...dynamicObjects];
 
   const handleAddPolygon = useCallback(() => {
     setDynamicObjects(prev => [...prev, generateRegularPolygon()]);
@@ -62,6 +60,8 @@ function App() {
     audioWorkletNode,
     sampleRate,
     setSampleRate,
+    destinationEnabled,
+    setDestinationEnabled,
   } = useVertexAudio();
 
   // Update audio engine when vertex data changes
@@ -99,6 +99,8 @@ function App() {
               onSetChannelGain={setChannelGain}
               onSetInterpolatedIntensity={setInterpolatedIntensity}
               onSetSampleRate={setSampleRate}
+              destinationEnabled={destinationEnabled}
+              onToggleDestination={setDestinationEnabled}
             />
             <div style={{ marginTop: 16 }}>
               <button

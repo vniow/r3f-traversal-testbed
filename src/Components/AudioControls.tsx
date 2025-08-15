@@ -13,6 +13,8 @@ interface AudioControlsProps {
   onSetChannelGain: (channel: string, gain: number) => void;
   onSetInterpolatedIntensity: (gain: number) => void;
   onSetSampleRate: (rate: number) => void;
+  destinationEnabled: boolean;
+  onToggleDestination: (enabled: boolean) => void;
 }
 
 export function AudioControls({
@@ -28,6 +30,8 @@ export function AudioControls({
   onSetChannelGain,
   onSetInterpolatedIntensity,
   onSetSampleRate,
+  destinationEnabled,
+  onToggleDestination,
 }: AudioControlsProps) {
   const SAMPLE_RATES = [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000];
   return (
@@ -154,6 +158,24 @@ export function AudioControls({
               />
             </div>
           ))}
+      </div>
+
+      {/* Destination toggle: connects the stereo mix to audioContext.destination */}
+      <div style={{ marginTop: 12 }}>
+        <label style={{ display: "block", fontSize: 12, color: "#bbb", marginBottom: 6 }}>Destination</label>
+        <button
+          onClick={() => onToggleDestination(!destinationEnabled)}
+          style={{
+            padding: "6px 10px",
+            background: destinationEnabled ? "#44ff44" : "#333",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          {destinationEnabled ? "Connected" : "Disconnected"}
+        </button>
       </div>
     </div>
   );

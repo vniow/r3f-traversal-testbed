@@ -5,12 +5,13 @@ export function useVertexAudio() {
   const audioEngineRef = useRef<VertexAudioEngine | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [globalGain, setGlobalGainState] = useState(0.1);
+  const [globalGain, setGlobalGainState] = useState(1);
   const [channelGains, setChannelGains] = useState<Record<string, number>>(
     Object.fromEntries(Object.entries(AUDIO_CHANNELS).map(([key, config]) => [key, config.gain]))
   );
   const [loopTick, setLoopTick] = useState<{ t: number; lengths: Record<string, number> } | null>(null);
   const [sampleRate, setSampleRateState] = useState<number>(48000);
+  const [destinationEnabled, setDestinationEnabledState] = useState<boolean>(true);
 
   // Initialize audio engine
   const initializeAudio = useCallback(async () => {
@@ -48,6 +49,12 @@ export function useVertexAudio() {
   const setGlobalGain = useCallback((gain: number) => {
     setGlobalGainState(gain);
     audioEngineRef.current?.setGlobalGain(gain);
+  }, []);
+
+  // Toggle destination (connect/disconnect stereo mix to destination)
+  const setDestinationEnabled = useCallback((enabled: boolean) => {
+    setDestinationEnabledState(enabled);
+    audioEngineRef.current?.setDestinationEnabled(enabled);
   }, []);
 
   // Set individual channel gain
@@ -103,6 +110,8 @@ export function useVertexAudio() {
     togglePlayback,
     setGlobalGain,
     setChannelGain,
+    destinationEnabled,
+    setDestinationEnabled,
     audioContext: audioEngineRef.current?.context || null,
     audioWorkletNode: audioEngineRef.current?.workletNode || null,
     dataForRender: audioEngineRef.current?.dataForRender || null,
