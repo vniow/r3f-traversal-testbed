@@ -1,7 +1,3 @@
-// import { useState } from "react";
-
-// import { useFrame } from "@react-three/fiber";
-
 // Type for objects with vertices
 export type ObjectWithVertices = {
   id?: string; // optional unique identifier for dynamic objects

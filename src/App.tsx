@@ -2,7 +2,6 @@ import "./App.css";
 import { Canvas } from "@react-three/fiber";
 import { View } from "@react-three/drei";
 import type { ObjectWithVertices } from "./Components/vertexUtils";
-// import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
 import GraphView from "./Components/GraphView";
 import { useState, useEffect, useCallback } from "react";
 import { SceneView } from "./Components/SceneView";
@@ -11,12 +10,6 @@ import { AudioControls } from "./Components/AudioControls";
 import { RenderView } from "./Components/RenderView";
 import { WorkletGraphView } from "./Components/WorkletGraphView";
 import { generateRegularPolygon } from "./Components/generatePolygon";
-
-// const staticObjects: ObjectWithVertices[] = [
-//   // { name: "Triangle", points: TRIANGLE_POINTS, colors: TRIANGLE_COLORS },
-//   // { name: "Square", points: SQUARE_POINTS, colors: SQUARE_COLORS },
-//   // { name: "Polygon", points: POLYGON_POINTS, colors: POLYGON_COLORS },
-// ];
 
 function App() {
   const [interpolatedIntensity, setInterpolatedIntensity] = useState<number>(0);
