@@ -20,6 +20,9 @@ interface DebugControlsProps {
   onSetSampleRate: (rate: number) => void;
   onEnableTestTone: (enabled: boolean, freq?: number) => void;
   onRequestStatus: () => void; // kept for backward compat but not used in UI
+  // New prop to toggle a 3D overlay component rendered in the app Canvas
+  show3D?: boolean;
+  onToggle3D?: () => void;
 }
 
 export function DebugAudioControls({
@@ -28,11 +31,13 @@ export function DebugAudioControls({
   sampleRate,
   channelCount = 0,
   stats,
+  show3D = false,
 
   onInitialize,
   onTogglePlayback,
   onSetSampleRate,
   onEnableTestTone,
+  onToggle3D,
 }: DebugControlsProps) {
   const SAMPLE_RATES = [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000];
   const [toneEnabled, setToneEnabled] = useState(false);
@@ -76,6 +81,16 @@ export function DebugAudioControls({
             {isPlaying ? "🔇 Stop" : "🔊 Start"}
           </button>
         )}
+
+        {/* Toggle for showing a simple 3D overlay in the Canvas */}
+        <div style={{ marginTop: 10 }}>
+          <button
+            onClick={() => onToggle3D && onToggle3D()}
+            style={{ padding: "6px 8px", background: show3D ? "#44ff44" : "#333", color: "#fff", border: "none", borderRadius: 4 }}
+          >
+            {show3D ? "Hide 3D Box" : "Show 3D Box"}
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -132,7 +147,6 @@ export function DebugAudioControls({
       {/* report interval control removed */}
 
       {/* waveform canvases removed; r3f overlay renders waveforms */}
-
       {/* logs removed per user request */}
     </div>
   );
