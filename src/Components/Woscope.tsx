@@ -1,9 +1,7 @@
-import { View, OrthographicCamera } from "@react-three/drei";
-import { useRef } from "react";
-import { useFrame } from "@react-three/fiber";
-import type { Mesh } from "three";
-
-// SceneView no longer accepts props in the simplified app.
+import { View, OrthographicCamera } from '@react-three/drei';
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import type { Mesh } from 'three';
 
 function RotatingBox() {
   const ref = useRef<Mesh | null>(null);
@@ -26,9 +24,9 @@ function RotatingBox() {
   );
 }
 
-export function SceneView() {
+export function Woscope() {
   return (
-    <View style={{ width: "100%", height: "100%" }}>
+    <View style={{ width: '100%', height: '100%' }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
       <RotatingBox />
     </View>

@@ -1,3 +1,14 @@
+import { Woscope } from './Woscope';
+
 export function AudioControls() {
-  return <div style={{ padding: 12, background: "#1a1a1a", borderRadius: 8, color: "#fff", fontSize: 14 }}>Audio Controls</div>;
+  return (
+    <div className='space-y-4'>
+      <div className='text-white'>test</div>
+
+      {/* Bordered container so the Woscope stands out on the dark background */}
+      <div className='border border-gray-600 rounded-md overflow-hidden w-64 h-64'>
+        <Woscope />
+      </div>
+    </div>
+  );
 }
