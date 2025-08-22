@@ -2,6 +2,12 @@ import { useEffect, useRef, useCallback } from 'react';
 
 type AudioRef = React.RefObject<HTMLAudioElement | null>;
 
+interface WindowWithAudioContext extends Window {
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+  __sharedAudioCtx?: AudioContext;
+}
+
 export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataRef = useRef(new Float32Array(nSamples));
@@ -14,14 +20,14 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       return;
     }
 
-    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const win = window as WindowWithAudioContext;
+    const AudioCtx = win.AudioContext || win.webkitAudioContext;
     if (!AudioCtx) {
       console.log('[useAudioAnalyser] no AudioContext support');
       return;
     }
 
     // reuse a single AudioContext across hook instances
-    const win = window as any;
     win.__sharedAudioCtx = win.__sharedAudioCtx || new AudioCtx();
     const audioCtx: AudioContext = win.__sharedAudioCtx;
 

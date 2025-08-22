@@ -1,20 +1,29 @@
 import { useRef } from 'react';
 
+interface AudioControlsProps {
+  onAudioRef?: (ref: HTMLAudioElement | null) => void;
+}
 
-
-
-export function AudioControls() {
+export function AudioControls({ onAudioRef }: AudioControlsProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const handleAudioRef = (element: HTMLAudioElement | null) => {
+    audioRef.current = element;
+    if (onAudioRef) {
+      onAudioRef(element);
+    }
+  };
 
   return (
     <div className='space-y-4'>
-      <div className='text-white'>test</div>
+      <div className='text-white text-center text-sm'>
+        Woscope Oscilloscope Visualization
+      </div>
 
-      {/* Audio playback for demo */}
-      <div>
+      {/* Audio playback controls */}
+      <div className='flex justify-center'>
         <audio
-          ref={audioRef}
+          ref={handleAudioRef}
           controls
           className='w-80'
           src='/alpha_molecule.mp3'
@@ -23,7 +32,10 @@ export function AudioControls() {
         </audio>
       </div>
 
-
+      <div className='text-xs text-gray-400 text-center max-w-80 mx-auto'>
+        The visualization above shows the stereo audio as an XY oscilloscope pattern. 
+        Left channel = X axis, Right channel = Y axis.
+      </div>
     </div>
   );
 }

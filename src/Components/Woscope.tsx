@@ -1,34 +1,114 @@
 import { View, OrthographicCamera } from '@react-three/drei';
-import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import type { Mesh } from 'three';
+import { useState, useEffect } from 'react';
+import { useAudioBuffer } from '../hooks/useAudioBuffer';
+import { WoscopeRenderer } from './WoscopeRenderer';
+import { createXYConfig } from '../utils/woscopeVertexUtils';
 
-function RotatingBox() {
-  const ref = useRef<Mesh | null>(null);
-  useFrame((_, delta) => {
-    if (ref.current) {
-      ref.current.rotation.x += delta * 0.5;
-      ref.current.rotation.y += delta * 0.7;
+interface WoscopeProps {
+  audioUrl?: string;
+  audioElement?: HTMLAudioElement | null;
+}
+
+export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: WoscopeProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  
+  // Load audio buffer data
+  const { audioData, loading, error } = useAudioBuffer(audioUrl);
+  
+  // Track audio playback state from external audio element
+  useEffect(() => {
+    const audio = audioElement;
+    if (!audio) {
+      console.log('[Woscope] No audio element provided');
+      return;
     }
+
+    console.log('[Woscope] Audio element connected:', audio.src);
+
+    const handlePlay = () => {
+      console.log('[Woscope] Audio play event');
+      setIsPlaying(true);
+    };
+    const handlePause = () => {
+      console.log('[Woscope] Audio pause event');
+      setIsPlaying(false);
+    };
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioElement]);
+
+  // Configuration for XY mode (Lissajous patterns)
+  const woscopeConfig = createXYConfig({
+    nSamples: 512, // Smaller for smooth real-time rendering
+    amplitudeScale: 2.0, // Boost for visibility
   });
 
   return (
-    <group>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <mesh ref={ref}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color='orange' />
-      </mesh>
-    </group>
-  );
-}
-
-export function Woscope() {
-  return (
-    <View style={{ width: '100%', height: '100%' }}>
-      <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
-      <RotatingBox />
-    </View>
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* 3D oscilloscope view */}
+      <View style={{ width: '100%', height: '100%' }}>
+        <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={100} />
+        
+        {/* Oscilloscope visualization */}
+        {audioData && !loading && !error ? (
+          <WoscopeRenderer
+            leftChannel={audioData.leftChannel}
+            rightChannel={audioData.rightChannel}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={audioData.duration}
+            sampleRate={audioData.sampleRate}
+            config={woscopeConfig}
+          />
+        ) : (
+          // Loading or error state
+          <mesh>
+            <planeGeometry args={[2, 0.1]} />
+            <meshBasicMaterial 
+              color={error ? 'red' : 'gray'} 
+              transparent 
+              opacity={0.5} 
+            />
+          </mesh>
+        )}
+        
+        {/* Ambient lighting for any 3D elements */}
+        <ambientLight intensity={0.2} />
+      </View>
+      
+      {/* Status overlay */}
+      <div style={{ 
+        position: 'absolute', 
+        top: 8, 
+        left: 8, 
+        color: 'white', 
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        pointerEvents: 'none',
+      }}>
+        {loading && 'Loading audio...'}
+        {error && `Error: ${error}`}
+        {audioData && !loading && !error && (
+          <div>
+            {isPlaying ? '▶' : '⏸'} {Math.round(currentTime)}s / {Math.round(audioData.duration)}s
+            <br />
+            {audioData.leftChannel.length.toLocaleString()} samples
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
