@@ -1,90 +1,22 @@
 import "./App.css";
 import { Canvas } from "@react-three/fiber";
 import { View } from "@react-three/drei";
-import type { ObjectWithVertices } from "./Components/vertexUtils";
-import { SQUARE_POINTS, SQUARE_COLORS } from "./Components/squarePoints";
-import { TRIANGLE_POINTS, TRIANGLE_COLORS } from "./Components/trianglePoints";
-import { POLYGON_POINTS, POLYGON_COLORS } from "./Components/polygonPoints";
-import GraphView from "./Components/GraphView";
-import { useState, useEffect } from "react";
+// Vertex objects and point data removed for simplified view
+// no hooks required in simplified App
 import { SceneView } from "./Components/SceneView";
 import { useVertexAudio } from "./Components/useVertexAudio";
 import { AudioControls } from "./Components/AudioControls";
-import { RenderView } from "./Components/RenderView";
-
-const objects: ObjectWithVertices[] = [
-  {
-    name: "Triangle",
-    points: TRIANGLE_POINTS,
-    colors: TRIANGLE_COLORS,
-  },
-  {
-    name: "Square",
-    points: SQUARE_POINTS,
-    colors: SQUARE_COLORS,
-  },
-
-  {
-    name: "Polygon",
-    points: POLYGON_POINTS,
-    colors: POLYGON_COLORS,
-  },
-];
+// RenderView removed in simplified setup
 
 function App() {
-  const [vertexData, setVertexData] = useState<{
-    screenX: number[];
-    screenY: number[];
-    screenZ: number[];
-    r: number[];
-    g: number[];
-    b: number[];
-    source?: ("object" | "interpolated")[];
-  }>({
-    screenX: [],
-    screenY: [],
-    screenZ: [],
-    r: [],
-    g: [],
-    b: [],
-    source: [],
-  });
-
-  // Audio synthesis hook
-  const {
-    isInitialized,
-    isPlaying,
-    globalGain,
-    channelGains,
-    initializeAudio,
-    updateVertexData,
-    togglePlayback,
-    setGlobalGain,
-    setChannelGain,
-    audioContext,
-    audioWorkletNode,
-  } = useVertexAudio();
-
-  // Update audio engine when vertex data changes
-  useEffect(() => {
-    if (isInitialized) {
-      updateVertexData({
-        screenX: vertexData.screenX,
-        screenY: vertexData.screenY,
-        screenZ: vertexData.screenZ,
-        r: vertexData.r,
-        g: vertexData.g,
-        b: vertexData.b,
-      });
-    }
-  }, [vertexData, isInitialized, updateVertexData]);
+  // Audio synthesis hook (kept for compatibility; controls are now simplified)
+  const { isInitialized, isPlaying, globalGain, channelGains, initializeAudio, togglePlayback, setGlobalGain, setChannelGain } =
+    useVertexAudio();
 
   return (
     <>
       <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", width: "100%", height: "100vh" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <GraphView vertexData={vertexData} />
-        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>{/* GraphView removed from simplified setup */}</div>
         <div style={{ display: "flex", flexDirection: "row", gap: 24, marginLeft: 24 }}>
           <div style={{ width: 256, minWidth: 256 }}>
             <AudioControls
@@ -99,13 +31,7 @@ function App() {
             />
           </div>
           <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <SceneView objects={objects} setVertexData={setVertexData} />
-          </div>
-          <div style={{ width: 256, minWidth: 256, aspectRatio: "1 / 1" }}>
-            <RenderView 
-              audioContext={audioContext} 
-              audioWorkletNode={audioWorkletNode} 
-            />
+            <SceneView />
           </div>
         </div>
       </div>

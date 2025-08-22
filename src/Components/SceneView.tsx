@@ -1,58 +1,36 @@
-import { View, OrbitControls, OrthographicCamera } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
-import { useLayoutEffect } from "react";
-import { Color } from "three";
-import Triangle from "./Triangle";
-import Square from "./Square";
-import { useLogVertices } from "./vertexUtils";
-import { InterpolatedPoints } from "./useLogVertices";
-import type { ObjectWithVertices } from "./vertexUtils";
-import Polygon from "./Polygon";
-import Lights from "./Lights";
-import { VertexScreenXCollector } from "./VertexScreenXCollector";
+import { View, OrthographicCamera } from "@react-three/drei";
+import { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import type { Mesh } from "three";
 
-interface SceneViewProps {
-  objects: ObjectWithVertices[];
-  setVertexData: (data: {
-    screenX: number[];
-    screenY: number[];
-    screenZ: number[];
-    r: number[];
-    g: number[];
-    b: number[];
-    source?: ("object" | "interpolated")[];
-  }) => void;
-}
+// SceneView no longer accepts props in the simplified app.
 
-function SceneBackground() {
-  const { scene } = useThree();
-  useLayoutEffect(() => {
-    scene.background = new Color("#333333");
-  }, [scene]);
-  return null;
-}
+function RotatingBox() {
+  const ref = useRef<Mesh | null>(null);
+  useFrame((_, delta) => {
+    if (ref.current) {
+      ref.current.rotation.x += delta * 0.5;
+      ref.current.rotation.y += delta * 0.7;
+    }
+  });
 
-function SceneWithLogging({ objects }: { objects: ObjectWithVertices[] }) {
-  useLogVertices(objects);
   return (
-    <>
-      <SceneBackground />
-      <Lights />
-      <Square />
-      <Triangle />
-      <Polygon />
-      <InterpolatedPoints objects={objects} />
-      <OrbitControls makeDefault />
-    </>
+    <group>
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 5, 5]} intensity={0.8} />
+      <mesh ref={ref}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color='orange' />
+      </mesh>
+    </group>
   );
 }
 
-export function SceneView({ objects, setVertexData }: SceneViewProps) {
+export function SceneView() {
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={50} />
-      <VertexScreenXCollector objects={objects} setVertexData={setVertexData} />
-      <SceneWithLogging objects={objects} />
+      <RotatingBox />
     </View>
   );
 }
