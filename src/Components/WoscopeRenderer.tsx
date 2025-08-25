@@ -38,9 +38,9 @@ export function WoscopeRenderer({
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   // Preallocated buffers to avoid per-frame allocations
-  const positionsBufRef = useRef<Float32Array | null>(null);
-  const quadIndexBufRef = useRef<Float32Array | null>(null);
-  const segmentTBufRef = useRef<Float32Array | null>(null);
+  // Interleaved vertex buffer backing array and index buffer
+  // Vertex layout: [aStart.x,aStart.y,aEnd.x,aEnd.y,aIdx] (5 floats per vertex)
+  const interleavedBufRef = useRef<Float32Array | null>(null);
   const indexBufRef = useRef<Uint16Array | null>(null);
 
   // Merge configuration with defaults
@@ -56,10 +56,11 @@ export function WoscopeRenderer({
   const shaderMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
+        uInvert: { value: woscopeShaderUniforms.uInvert.value },
         uSize: { value: woscopeShaderUniforms.uSize.value },
         uIntensity: { value: woscopeShaderUniforms.uIntensity.value },
-        uColor: { value: new THREE.Vector3(...woscopeShaderUniforms.uColor.value) },
-        uResolution: { value: new THREE.Vector2(...woscopeShaderUniforms.uResolution.value) },
+        uColor: { value: new THREE.Vector4(...(woscopeShaderUniforms.uColor.value as number[])) },
+        uN: { value: woscopeShaderUniforms.uN.value },
       },
       vertexShader: woscopeVertexShader,
       fragmentShader: woscopeFragmentShader,
@@ -82,55 +83,72 @@ export function WoscopeRenderer({
     // Ensure preallocated buffers and attributes exist (based on woscopeConfig.nSamples)
     const maxSegments = Math.max(1, (woscopeConfig.nSamples || 1024) - 1);
     const maxVertices = maxSegments * 4;
+    const vertexStride = 5; // floats per vertex in interleaved layout
+    // helper: compute normalized intensity based on draw count vs expected
+    const computeNormalizedIntensity = (drawIndices: number) => {
+      const expectedIndices = Math.max(1, ((woscopeConfig.nSamples || 1024) - 1) * 6);
+      // scale by sqrt to reduce sensitivity, clamp to reasonable range
+      const scale = Math.sqrt(expectedIndices / Math.max(1, drawIndices));
+      const clamped = Math.max(0.5, Math.min(2.0, scale));
+      return clamped; // base intensity = 1.0 * clamped
+    };
 
-    if (!geometry.getAttribute('position')) {
+    if (!geometry.getAttribute('aStart')) {
       // allocate backing arrays once
-      positionsBufRef.current = new Float32Array(maxVertices * 3);
-      quadIndexBufRef.current = new Float32Array(maxVertices);
-      segmentTBufRef.current = new Float32Array(maxVertices);
+      interleavedBufRef.current = new Float32Array(maxVertices * vertexStride);
       indexBufRef.current = new Uint16Array(maxSegments * 6);
 
-      geometry.setAttribute('position', new THREE.BufferAttribute(positionsBufRef.current, 3));
-      geometry.setAttribute('quadIndex', new THREE.BufferAttribute(quadIndexBufRef.current, 1));
-      geometry.setAttribute('segmentT', new THREE.BufferAttribute(segmentTBufRef.current, 1));
+      // Create an InterleavedBuffer and InterleavedBufferAttributes to map into the interleaved layout
+      const interleaved = new THREE.InterleavedBuffer(interleavedBufRef.current, vertexStride);
+      geometry.setAttribute('aStart', new THREE.InterleavedBufferAttribute(interleaved, 2, 0)); // offset 0
+      geometry.setAttribute('aEnd', new THREE.InterleavedBufferAttribute(interleaved, 2, 2)); // offset 2
+      geometry.setAttribute('aIdx', new THREE.InterleavedBufferAttribute(interleaved, 1, 4)); // offset 4
       geometry.setIndex(new THREE.BufferAttribute(indexBufRef.current, 1));
     }
 
     // If a frozen snapshot exists and playback is paused, render the snapshot and return
     if (!isPlaying && typeof snapshot !== 'undefined' && snapshot !== null) {
       if (snapshot.numSegments === 0) return;
-
-      const actualVertices = snapshot.vertices.length / 4;
-      const posBuf = positionsBufRef.current!;
-      const quadBuf = quadIndexBufRef.current!;
-      const segTBuf = segmentTBufRef.current!;
+      // snapshot.vertices previously contained interleaved format used by old code; if snapshot was captured by the new interleaved generator
+      // it should already match the new layout. We'll copy into the interleaved backing buffer.
+      const snapshotVertices = snapshot.vertices;
+      const vertexCount = snapshotVertices.length / 5; // if older snapshots exist, fallback heuristics would be needed
+      const interleaved = interleavedBufRef.current!;
       const idxBuf = indexBufRef.current!;
 
-      for (let i = 0; i < actualVertices; i++) {
-        const baseIndex = i * 4;
-        const posIndex = i * 3;
-        posBuf[posIndex] = snapshot.vertices[baseIndex];
-        posBuf[posIndex + 1] = snapshot.vertices[baseIndex + 1];
-        posBuf[posIndex + 2] = 0;
-        quadBuf[i] = snapshot.vertices[baseIndex + 2];
-        segTBuf[i] = snapshot.vertices[baseIndex + 3];
+      // If snapshot vertices appear to be in the old 4-float format, we try best-effort conversion
+      if (snapshotVertices.length === vertexCount * 4) {
+        // old format [x,y,quadIndex,segmentT] -> convert to [aStart.x,aStart.y,aEnd.x,aEnd.y,aIdx]
+        for (let v = 0; v < vertexCount; v++) {
+          const srcBase = v * 4;
+          const dstBase = v * vertexStride;
+          const x = snapshotVertices[srcBase + 0];
+          const y = snapshotVertices[srcBase + 1];
+          // degenerate aEnd = aStart for lack of neighbor info
+          interleaved[dstBase + 0] = x;
+          interleaved[dstBase + 1] = y;
+          interleaved[dstBase + 2] = x;
+          interleaved[dstBase + 3] = y;
+          interleaved[dstBase + 4] = v;
+        }
+      } else {
+        // assume snapshot is already in the new interleaved format
+        interleaved.set(snapshotVertices.subarray(0, vertexCount * vertexStride));
       }
 
       idxBuf.set(snapshot.indices.subarray(0, snapshot.indices.length));
 
-      const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-      const quadAttr = geometry.getAttribute('quadIndex') as THREE.BufferAttribute;
-      const segTAttr = geometry.getAttribute('segmentT') as THREE.BufferAttribute;
+      const aStartAttr = geometry.getAttribute('aStart') as THREE.InterleavedBufferAttribute;
+      // const aEndAttr = geometry.getAttribute('aEnd') as THREE.InterleavedBufferAttribute;
+      // const aIdxAttr = geometry.getAttribute('aIdx') as THREE.InterleavedBufferAttribute;
       const idxAttr = geometry.index as THREE.BufferAttribute;
 
-      posAttr.needsUpdate = true;
-      quadAttr.needsUpdate = true;
-      segTAttr.needsUpdate = true;
+      // mark interleaved buffer as needing update
+      (aStartAttr.data as THREE.InterleavedBuffer).needsUpdate = true;
       idxAttr.needsUpdate = true;
 
       geometry.setDrawRange(0, snapshot.indices.length);
-      // render snapshot at full intensity (do not dim on pause)
-      materialRef.current!.uniforms.uIntensity.value = 1.0;
+      materialRef.current!.uniforms.uIntensity.value = computeNormalizedIntensity(snapshot.indices.length);
       return;
     }
 
@@ -141,40 +159,22 @@ export function WoscopeRenderer({
         const vertexData = createVertexDataFromAudio(liveLeft, liveRight, 0, woscopeConfig);
         if (vertexData.numSegments === 0) return;
 
-        // Write into preallocated buffers
-        const actualVertices = vertexData.vertices.length / 4;
-        const posBuf = positionsBufRef.current!;
-        const quadBuf = quadIndexBufRef.current!;
-        const segTBuf = segmentTBufRef.current!;
+        const actualVertices = vertexData.vertices.length / vertexStride;
+        const interleaved = interleavedBufRef.current!;
         const idxBuf = indexBufRef.current!;
 
-        for (let i = 0; i < actualVertices; i++) {
-          const baseIndex = i * 4;
-          const posIndex = i * 3;
-          posBuf[posIndex] = vertexData.vertices[baseIndex];
-          posBuf[posIndex + 1] = vertexData.vertices[baseIndex + 1];
-          posBuf[posIndex + 2] = 0;
-          quadBuf[i] = vertexData.vertices[baseIndex + 2];
-          segTBuf[i] = vertexData.vertices[baseIndex + 3];
-        }
-
-        // copy indices
+        // copy interleaved vertex data directly into our backing buffer
+        interleaved.set(vertexData.vertices.subarray(0, actualVertices * vertexStride));
         idxBuf.set(vertexData.indices.subarray(0, vertexData.indices.length));
 
-        // Update attributes and draw range
-        const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-        const quadAttr = geometry.getAttribute('quadIndex') as THREE.BufferAttribute;
-        const segTAttr = geometry.getAttribute('segmentT') as THREE.BufferAttribute;
+        const aStartAttr = geometry.getAttribute('aStart') as THREE.InterleavedBufferAttribute;
         const idxAttr = geometry.index as THREE.BufferAttribute;
 
-        posAttr.needsUpdate = true;
-        quadAttr.needsUpdate = true;
-        segTAttr.needsUpdate = true;
+        (aStartAttr.data as THREE.InterleavedBuffer).needsUpdate = true;
         idxAttr.needsUpdate = true;
 
         geometry.setDrawRange(0, vertexData.indices.length);
-        // Keep intensity at full brightness even when paused/snapshot so visuals don't dim
-        materialRef.current!.uniforms.uIntensity.value = 1.0;
+        materialRef.current!.uniforms.uIntensity.value = computeNormalizedIntensity(vertexData.indices.length);
         return;
       }
     }
@@ -189,45 +189,28 @@ export function WoscopeRenderer({
     //   console.log('[WoscopeRenderer] timeProgress:', timeProgress.toFixed(3), 'startSample:', startSample, 'isPlaying:', isPlaying);
     // }
 
-    // Generate vertex data for current audio window
+    // Generate vertex data for current audio window (fallback decoded-buffer path)
     const vertexData = createVertexDataFromAudio(leftChannel, rightChannel, startSample, woscopeConfig);
-
     if (vertexData.numSegments === 0) return;
 
-    // Update geometry with new vertex data into preallocated buffers
-    const actualVertices = vertexData.vertices.length / 4;
-    const posBuf = positionsBufRef.current!;
-    const quadBuf = quadIndexBufRef.current!;
-    const segTBuf = segmentTBufRef.current!;
+    const actualVertices = vertexData.vertices.length / vertexStride;
+    const interleaved = interleavedBufRef.current!;
     const idxBuf = indexBufRef.current!;
 
-    for (let i = 0; i < actualVertices; i++) {
-      const baseIndex = i * 4;
-      const posIndex = i * 3;
-      posBuf[posIndex] = vertexData.vertices[baseIndex];
-      posBuf[posIndex + 1] = vertexData.vertices[baseIndex + 1];
-      posBuf[posIndex + 2] = 0;
-      quadBuf[i] = vertexData.vertices[baseIndex + 2];
-      segTBuf[i] = vertexData.vertices[baseIndex + 3];
-    }
-
+    interleaved.set(vertexData.vertices.subarray(0, actualVertices * vertexStride));
     idxBuf.set(vertexData.indices.subarray(0, vertexData.indices.length));
 
-    const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-    const quadAttr = geometry.getAttribute('quadIndex') as THREE.BufferAttribute;
-    const segTAttr = geometry.getAttribute('segmentT') as THREE.BufferAttribute;
+    const aStartAttr = geometry.getAttribute('aStart') as THREE.InterleavedBufferAttribute;
     const idxAttr = geometry.index as THREE.BufferAttribute;
 
-    posAttr.needsUpdate = true;
-    quadAttr.needsUpdate = true;
-    segTAttr.needsUpdate = true;
+    (aStartAttr.data as THREE.InterleavedBuffer).needsUpdate = true;
     idxAttr.needsUpdate = true;
 
     geometry.setDrawRange(0, vertexData.indices.length);
 
     // Update material uniforms
     const material = materialRef.current;
-    material.uniforms.uIntensity.value = isPlaying ? 1.0 : 0.5;
+    material.uniforms.uIntensity.value = computeNormalizedIntensity(vertexData.indices.length);
   });
 
   return (

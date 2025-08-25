@@ -4,6 +4,7 @@ import { useAudioBuffer } from '../hooks/useAudioBuffer';
 import { WoscopeRenderer } from './WoscopeRenderer';
 import { createXYConfig, createVertexDataFromAudio, type WoscopeVertexData } from '../utils/woscopeVertexUtils';
 import { useAudioAnalyser } from '../hooks/useAudioAnalyser';
+import WoscopeEffects from './WoscopeEffects';
 
 interface WoscopeProps {
   audioUrl?: string;
@@ -22,7 +23,7 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
   const { pull: pullAnalysers } = useAudioAnalyser(audioRef, audioData ? Math.min(2048, audioData.leftChannel.length) : 1024);
   // Configuration for XY mode (Lissajous patterns)
   const woscopeConfig = createXYConfig({
-    nSamples: 512, // Smaller for smooth real-time rendering
+    nSamples: 2048,
     amplitudeScale: 2.0, // Boost for visibility
   });
 
@@ -133,8 +134,11 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
           </mesh>
         )}
 
+        {/* Built-in bloom + composer */}
+        {/* <WoscopeEffects intensity={1.2} luminanceThreshold={0.18} luminanceSmoothing={0.9} /> */}
+
         {/* Ambient lighting for any 3D elements */}
-        <ambientLight intensity={0.2} />
+        <ambientLight intensity={1} />
       </View>
 
       {/* Status overlay */}

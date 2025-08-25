@@ -4,6 +4,7 @@
  */
 
 export interface WoscopeVertexData {
+  /** Interleaved vertex buffer: [aStart.x,aStart.y,aEnd.x,aEnd.y,aIdx] per vertex */
   vertices: Float32Array;
   indices: Uint16Array;
   numSegments: number;
@@ -42,11 +43,11 @@ export function createVertexDataFromAudio(
   }
 
   // Each segment needs 4 vertices (2 endpoints × 2 for quad expansion)
-  // Vertex format: [x, y, quadIndex, segmentT]
-  // - x, y: position in oscilloscope space
-  // - quadIndex: 0-3 for quad corner identification
-  // - segmentT: 0.0-1.0 interpolation along segment
-  const vertexData = new Float32Array(numSegments * 4 * 4);
+  // Vertex format (interleaved): [aStart.x, aStart.y, aEnd.x, aEnd.y, aIdx]
+  // - aStart: start point of the segment
+  // - aEnd: end point of the segment
+  // - aIdx: integer-like float: segmentIndex*4 + quadCorner (0..3)
+  const vertexData = new Float32Array(numSegments * 4 * 5);
 
   // Generate vertices for each line segment
   let vertexIndex = 0;
@@ -71,29 +72,35 @@ export function createVertexDataFromAudio(
     const t2 = sweep ? ((i + 1) / (numSegments - 1)) * timeScale : scaledX2;
 
     // Create 4 vertices for this segment (quad corners)
-    // Vertex 0: start point, quad corner 0
+    // For each vertex we emit: aStart.x, aStart.y, aEnd.x, aEnd.y, aIdx
+    const baseIdx = i * 4;
+    // quad corner 0
+    vertexData[vertexIndex++] = t1; // aStart.x
+    vertexData[vertexIndex++] = scaledY1; // aStart.y
+    vertexData[vertexIndex++] = t2; // aEnd.x
+    vertexData[vertexIndex++] = scaledY2; // aEnd.y
+    vertexData[vertexIndex++] = baseIdx + 0; // aIdx
+
+    // quad corner 1
     vertexData[vertexIndex++] = t1;
     vertexData[vertexIndex++] = scaledY1;
-    vertexData[vertexIndex++] = 0; // quadIndex
-    vertexData[vertexIndex++] = 0; // segmentT
+    vertexData[vertexIndex++] = t2;
+    vertexData[vertexIndex++] = scaledY2;
+    vertexData[vertexIndex++] = baseIdx + 1;
 
-    // Vertex 1: start point, quad corner 1
+    // quad corner 2
     vertexData[vertexIndex++] = t1;
     vertexData[vertexIndex++] = scaledY1;
-    vertexData[vertexIndex++] = 1; // quadIndex
-    vertexData[vertexIndex++] = 0; // segmentT
-
-    // Vertex 2: end point, quad corner 2
     vertexData[vertexIndex++] = t2;
     vertexData[vertexIndex++] = scaledY2;
-    vertexData[vertexIndex++] = 2; // quadIndex
-    vertexData[vertexIndex++] = 1; // segmentT
+    vertexData[vertexIndex++] = baseIdx + 2;
 
-    // Vertex 3: end point, quad corner 3
+    // quad corner 3
+    vertexData[vertexIndex++] = t1;
+    vertexData[vertexIndex++] = scaledY1;
     vertexData[vertexIndex++] = t2;
     vertexData[vertexIndex++] = scaledY2;
-    vertexData[vertexIndex++] = 3; // quadIndex
-    vertexData[vertexIndex++] = 1; // segmentT
+    vertexData[vertexIndex++] = baseIdx + 3;
   }
 
   // Generate indices for triangles (2 triangles per quad)
