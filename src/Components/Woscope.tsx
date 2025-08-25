@@ -1,8 +1,9 @@
 import { View, OrthographicCamera } from '@react-three/drei';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAudioBuffer } from '../hooks/useAudioBuffer';
 import { WoscopeRenderer } from './WoscopeRenderer';
 import { createXYConfig } from '../utils/woscopeVertexUtils';
+import { useAudioAnalyser } from '../hooks/useAudioAnalyser';
 
 interface WoscopeProps {
   audioUrl?: string;
@@ -12,10 +13,14 @@ interface WoscopeProps {
 export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: WoscopeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // Load audio buffer data
   const { audioData, loading, error } = useAudioBuffer(audioUrl);
-  
+
+  // Hook up analyser for live per-frame samples
+  const { pull: pullAnalysers } = useAudioAnalyser(audioRef, audioData ? Math.min(2048, audioData.leftChannel.length) : 1024);
+
   // Track audio playback state from external audio element
   useEffect(() => {
     const audio = audioElement;
@@ -50,6 +55,11 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
     };
   }, [audioElement]);
 
+  // sync the external audio element into our local ref used by the analyser hook
+  useEffect(() => {
+    audioRef.current = audioElement || null;
+  }, [audioElement]);
+
   // Configuration for XY mode (Lissajous patterns)
   const woscopeConfig = createXYConfig({
     nSamples: 512, // Smaller for smooth real-time rendering
@@ -61,7 +71,7 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
       {/* 3D oscilloscope view */}
       <View style={{ width: '100%', height: '100%' }}>
         <OrthographicCamera makeDefault position={[0, 0, 5]} zoom={100} />
-        
+
         {/* Oscilloscope visualization */}
         {audioData && !loading && !error ? (
           <WoscopeRenderer
@@ -71,41 +81,41 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
             currentTime={currentTime}
             duration={audioData.duration}
             sampleRate={audioData.sampleRate}
+            audioElement={audioRef.current}
+            analyserPull={pullAnalysers}
             config={woscopeConfig}
           />
         ) : (
           // Loading or error state
           <mesh>
             <planeGeometry args={[2, 0.1]} />
-            <meshBasicMaterial 
-              color={error ? 'red' : 'gray'} 
-              transparent 
-              opacity={0.5} 
-            />
+            <meshBasicMaterial color={error ? 'red' : 'gray'} transparent opacity={0.5} />
           </mesh>
         )}
-        
+
         {/* Ambient lighting for any 3D elements */}
         <ambientLight intensity={0.2} />
       </View>
-      
+
       {/* Status overlay */}
-      <div style={{ 
-        position: 'absolute', 
-        top: 8, 
-        left: 8, 
-        color: 'white', 
-        fontSize: '12px',
-        fontFamily: 'monospace',
-        pointerEvents: 'none',
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          color: 'white',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          pointerEvents: 'none',
+        }}
+      >
         {loading && 'Loading audio...'}
         {error && `Error: ${error}`}
         {audioData && !loading && !error && (
           <div>
             {isPlaying ? '▶' : '⏸'} {Math.round(currentTime)}s / {Math.round(audioData.duration)}s
             <br />
-            {audioData.leftChannel.length.toLocaleString()} samples
+            {audioData.rightChannel.length.toLocaleString()} samples
           </div>
         )}
       </div>

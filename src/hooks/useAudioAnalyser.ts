@@ -8,10 +8,21 @@ interface WindowWithAudioContext extends Window {
   __sharedAudioCtx?: AudioContext;
 }
 
+/**
+ * useAudioAnalyser - provides per-channel analysers (left/right) and a pull() helper
+ * that returns the latest float time-domain samples for both channels. This is
+ * useful for driving visuals at rAF frequency.
+ */
 export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataRef = useRef(new Float32Array(nSamples));
+  const analyserLeftRef = useRef<AnalyserNode | null>(null);
+  const analyserRightRef = useRef<AnalyserNode | null>(null);
+  const dataLeftRef = useRef(new Float32Array(nSamples));
+  const dataRightRef = useRef(new Float32Array(nSamples));
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const splitterRef = useRef<ChannelSplitterNode | null>(null);
+  // reusable temporary arrays sized to analyser.fftSize to avoid allocations in pull()
+  const tmpLeftRef = useRef<Float32Array | null>(null);
+  const tmpRightRef = useRef<Float32Array | null>(null);
 
   useEffect(() => {
     const audioEl = audioRef?.current;
@@ -33,7 +44,7 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
 
     console.log('[useAudioAnalyser] AudioContext state:', audioCtx.state);
 
-    // create source and analyser
+    // create source and two analysers (left/right)
     let connectedGain: GainNode | null = null;
     try {
       sourceRef.current = audioCtx.createMediaElementSource(audioEl);
@@ -43,26 +54,42 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       sourceRef.current = null;
     }
 
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = Math.max(2048, nSamples * 2);
-    analyserRef.current = analyser;
-    console.log('[useAudioAnalyser] Analyser created, fftSize:', analyser.fftSize);
+    const fft = Math.max(2048, nSamples * 2);
+    const analyserL = audioCtx.createAnalyser();
+    const analyserR = audioCtx.createAnalyser();
+    analyserL.fftSize = fft;
+    analyserR.fftSize = fft;
+    analyserLeftRef.current = analyserL;
+    analyserRightRef.current = analyserR;
+    // allocate analyser temporary buffers once
+    tmpLeftRef.current = new Float32Array(fft);
+    tmpRightRef.current = new Float32Array(fft);
+    console.log('[useAudioAnalyser] Analysers created, fftSize:', fft);
 
     if (sourceRef.current) {
-      // connect source -> analyser
-      sourceRef.current.connect(analyser);
+      // create splitter and route channels to separate analysers
+      splitterRef.current = audioCtx.createChannelSplitter(2);
+      sourceRef.current.connect(splitterRef.current);
+      try {
+        splitterRef.current.connect(analyserL, 0);
+        splitterRef.current.connect(analyserR, 1);
+      } catch (err) {
+        // some browsers may throw if channels not available; fall back to mono analyser
+        console.warn('[useAudioAnalyser] splitter connection failed, falling back to single analyser', err);
+        sourceRef.current.connect(analyserL);
+        analyserR.disconnect();
+        analyserRightRef.current = null;
+      }
 
       // create a gain node to route audio to destination so playback is audible
       try {
         connectedGain = audioCtx.createGain();
-        // keep full volume by default
         connectedGain.gain.value = 1.0;
         sourceRef.current.connect(connectedGain);
         connectedGain.connect(audioCtx.destination);
-        console.log('[useAudioAnalyser] Audio routing: source -> analyser, source -> gain -> destination');
+        console.log('[useAudioAnalyser] Audio routing: source -> splitter -> analysers, source -> gain -> destination');
       } catch (error) {
         console.error('[useAudioAnalyser] Failed to connect gain node:', error);
-        // if connect fails, fall back to letting the <audio> element output directly
         if (connectedGain) {
           if (connectedGain.disconnect) connectedGain.disconnect();
           connectedGain = null;
@@ -70,15 +97,18 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       }
     }
 
-    // ensure AudioContext resumes on user interaction (play) — many browsers block autoplay
+    // ensure AudioContext resumes on user interaction (play)
     const resume = () => {
       console.log('[useAudioAnalyser] Resume triggered, current state:', audioCtx.state);
       if (audioCtx.state === 'suspended') {
-        audioCtx.resume().then(() => {
-          console.log('[useAudioAnalyser] AudioContext resumed successfully');
-        }).catch((error) => {
-          console.error('[useAudioAnalyser] Failed to resume AudioContext:', error);
-        });
+        audioCtx
+          .resume()
+          .then(() => {
+            console.log('[useAudioAnalyser] AudioContext resumed successfully');
+          })
+          .catch(error => {
+            console.error('[useAudioAnalyser] Failed to resume AudioContext:', error);
+          });
       }
     };
     audioEl.addEventListener('play', resume);
@@ -87,28 +117,77 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       console.log('[useAudioAnalyser] Cleanup');
       audioEl.removeEventListener('play', resume);
       if (sourceRef.current && sourceRef.current.disconnect) {
-        sourceRef.current.disconnect();
+        try {
+          sourceRef.current.disconnect();
+        } catch (e) {
+          console.warn('[useAudioAnalyser] error disconnecting source', e);
+        }
         sourceRef.current = null;
       }
+      if (splitterRef.current && splitterRef.current.disconnect) {
+        try {
+          splitterRef.current.disconnect();
+        } catch (e) {
+          console.warn('[useAudioAnalyser] error disconnecting splitter', e);
+        }
+        splitterRef.current = null;
+      }
       if (connectedGain && connectedGain.disconnect) {
-        connectedGain.disconnect();
+        try {
+          connectedGain.disconnect();
+        } catch (e) {
+          console.warn('[useAudioAnalyser] error disconnecting gain', e);
+        }
       }
-      if (analyser && analyser.disconnect) {
-        analyser.disconnect();
+      if (analyserL && analyserL.disconnect) {
+        try {
+          analyserL.disconnect();
+        } catch (e) {
+          console.warn('[useAudioAnalyser] error disconnecting analyserL', e);
+        }
       }
-      analyserRef.current = null;
+      if (analyserR && analyserR.disconnect) {
+        try {
+          analyserR.disconnect();
+        } catch (e) {
+          console.warn('[useAudioAnalyser] error disconnecting analyserR', e);
+        }
+      }
+      analyserLeftRef.current = null;
+      analyserRightRef.current = null;
+      // release tmp buffers
+      tmpLeftRef.current = null;
+      tmpRightRef.current = null;
     };
   }, [audioRef, nSamples]);
 
   const pull = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return dataRef.current;
-    const tmp = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(tmp);
-    // copy first nSamples
-    dataRef.current.set(tmp.subarray(0, dataRef.current.length));
-    return dataRef.current;
+    const leftAnalyser = analyserLeftRef.current;
+    const rightAnalyser = analyserRightRef.current;
+
+    // If neither analyser exists, return empty buffers
+    if (!leftAnalyser && !rightAnalyser) {
+      return { left: dataLeftRef.current, right: dataRightRef.current };
+    }
+
+    // Read left channel into reusable tmp buffer
+    if (leftAnalyser && tmpLeftRef.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      leftAnalyser.getFloatTimeDomainData(tmpLeftRef.current as any);
+      dataLeftRef.current.set(tmpLeftRef.current.subarray(0, dataLeftRef.current.length));
+    }
+
+    // Read right channel into reusable tmp buffer if available, otherwise copy left
+    if (rightAnalyser && tmpRightRef.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rightAnalyser.getFloatTimeDomainData(tmpRightRef.current as any);
+      dataRightRef.current.set(tmpRightRef.current.subarray(0, dataRightRef.current.length));
+    } else {
+      dataRightRef.current.set(dataLeftRef.current);
+    }
+
+    return { left: dataLeftRef.current, right: dataRightRef.current };
   }, []);
 
-  return { dataRef, pull, analyserRef } as const;
+  return { dataLeftRef, dataRightRef, pull, analyserLeftRef, analyserRightRef } as const;
 }
