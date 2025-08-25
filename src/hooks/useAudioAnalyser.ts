@@ -20,9 +20,6 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
   const dataRightRef = useRef(new Float32Array(nSamples));
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const splitterRef = useRef<ChannelSplitterNode | null>(null);
-  // reusable temporary arrays sized to analyser.fftSize to avoid allocations in pull()
-  const tmpLeftRef = useRef<Float32Array | null>(null);
-  const tmpRightRef = useRef<Float32Array | null>(null);
 
   useEffect(() => {
     const audioEl = audioRef?.current;
@@ -61,9 +58,9 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
     analyserR.fftSize = fft;
     analyserLeftRef.current = analyserL;
     analyserRightRef.current = analyserR;
-    // allocate analyser temporary buffers once
-    tmpLeftRef.current = new Float32Array(fft);
-    tmpRightRef.current = new Float32Array(fft);
+    // resize the data buffers to match analyser.fftSize so we can call getFloatTimeDomainData directly into them
+    dataLeftRef.current = new Float32Array(fft);
+    dataRightRef.current = new Float32Array(fft);
     console.log('[useAudioAnalyser] Analysers created, fftSize:', fft);
 
     if (sourceRef.current) {
@@ -155,9 +152,7 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       }
       analyserLeftRef.current = null;
       analyserRightRef.current = null;
-      // release tmp buffers
-      tmpLeftRef.current = null;
-      tmpRightRef.current = null;
+      // (dataLeftRef/dataRightRef remain allocated; they're reused across pulls)
     };
   }, [audioRef, nSamples]);
 
@@ -170,24 +165,23 @@ export function useAudioAnalyser(audioRef: AudioRef, nSamples = 1024) {
       return { left: dataLeftRef.current, right: dataRightRef.current };
     }
 
-    // Read left channel into reusable tmp buffer
-    if (leftAnalyser && tmpLeftRef.current) {
+    // Directly write analyser output into the preallocated data buffers (sized to analyser.fftSize)
+    if (leftAnalyser && dataLeftRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      leftAnalyser.getFloatTimeDomainData(tmpLeftRef.current as any);
-      dataLeftRef.current.set(tmpLeftRef.current.subarray(0, dataLeftRef.current.length));
+      leftAnalyser.getFloatTimeDomainData(dataLeftRef.current as any);
     }
 
-    // Read right channel into reusable tmp buffer if available, otherwise copy left
-    if (rightAnalyser && tmpRightRef.current) {
+    if (rightAnalyser && dataRightRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rightAnalyser.getFloatTimeDomainData(tmpRightRef.current as any);
-      dataRightRef.current.set(tmpRightRef.current.subarray(0, dataRightRef.current.length));
+      rightAnalyser.getFloatTimeDomainData(dataRightRef.current as any);
     } else {
+      // fallback: copy left into right's view for downstream consumers
       dataRightRef.current.set(dataLeftRef.current);
     }
 
-    return { left: dataLeftRef.current, right: dataRightRef.current };
-  }, []);
+    // Return views sized to the requested nSamples to avoid forcing callers to use the full fft buffer
+    return { left: dataLeftRef.current.subarray(0, nSamples), right: dataRightRef.current.subarray(0, nSamples) };
+  }, [nSamples]);
 
   return { dataLeftRef, dataRightRef, pull, analyserLeftRef, analyserRightRef } as const;
 }

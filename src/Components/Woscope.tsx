@@ -2,7 +2,7 @@ import { View, OrthographicCamera } from '@react-three/drei';
 import { useState, useEffect, useRef } from 'react';
 import { useAudioBuffer } from '../hooks/useAudioBuffer';
 import { WoscopeRenderer } from './WoscopeRenderer';
-import { createXYConfig } from '../utils/woscopeVertexUtils';
+import { createXYConfig, createVertexDataFromAudio, type WoscopeVertexData } from '../utils/woscopeVertexUtils';
 import { useAudioAnalyser } from '../hooks/useAudioAnalyser';
 
 interface WoscopeProps {
@@ -20,6 +20,14 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
 
   // Hook up analyser for live per-frame samples
   const { pull: pullAnalysers } = useAudioAnalyser(audioRef, audioData ? Math.min(2048, audioData.leftChannel.length) : 1024);
+  // Configuration for XY mode (Lissajous patterns)
+  const woscopeConfig = createXYConfig({
+    nSamples: 512, // Smaller for smooth real-time rendering
+    amplitudeScale: 2.0, // Boost for visibility
+  });
+
+  // frozen vertex snapshot captured on pause
+  const [snapshot, setSnapshot] = useState<WoscopeVertexData | null>(null);
 
   // Track audio playback state from external audio element
   useEffect(() => {
@@ -31,40 +39,71 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
 
     console.log('[Woscope] Audio element connected:', audio.src);
 
+    const captureSnapshot = () => {
+      try {
+        if (audioData && audio) {
+          const startSample = Math.floor(audio.currentTime * audioData.sampleRate);
+          const snap = createVertexDataFromAudio(audioData.leftChannel, audioData.rightChannel, startSample, woscopeConfig);
+          setSnapshot(snap);
+        } else if (pullAnalysers) {
+          const { left, right } = pullAnalysers();
+          // freeze analyser buffers by copying
+          const leftCopy = new Float32Array(left);
+          const rightCopy = new Float32Array(right);
+          const snap = createVertexDataFromAudio(leftCopy, rightCopy, 0, woscopeConfig);
+          setSnapshot(snap);
+        }
+      } catch (err) {
+        console.warn('[Woscope] Failed to capture snapshot', err);
+      }
+    };
+
     const handlePlay = () => {
       console.log('[Woscope] Audio play event');
       setIsPlaying(true);
+      // clear any frozen snapshot when playback resumes
+      setSnapshot(null);
     };
+
     const handlePause = () => {
       console.log('[Woscope] Audio pause event');
       setIsPlaying(false);
+      // capture a frozen snapshot of the current window so visuals remain static while paused
+      captureSnapshot();
     };
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      // if paused while scrubbing, update the frozen snapshot so visuals follow the scrubber
+      if (audio.paused) captureSnapshot();
+    };
+
+    const handleSeeked = () => {
+      setCurrentTime(audio.currentTime);
+      if (audio.paused) captureSnapshot();
+    };
+
     const handleEnded = () => setIsPlaying(false);
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('seeked', handleSeeked);
     audio.addEventListener('ended', handleEnded);
 
     return () => {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [audioElement]);
+  }, [audioElement, audioData, pullAnalysers, woscopeConfig]);
 
   // sync the external audio element into our local ref used by the analyser hook
   useEffect(() => {
     audioRef.current = audioElement || null;
   }, [audioElement]);
-
-  // Configuration for XY mode (Lissajous patterns)
-  const woscopeConfig = createXYConfig({
-    nSamples: 512, // Smaller for smooth real-time rendering
-    amplitudeScale: 2.0, // Boost for visibility
-  });
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -83,6 +122,7 @@ export function Woscope({ audioUrl = '/alpha_molecule.mp3', audioElement }: Wosc
             sampleRate={audioData.sampleRate}
             audioElement={audioRef.current}
             analyserPull={pullAnalysers}
+            snapshot={snapshot}
             config={woscopeConfig}
           />
         ) : (

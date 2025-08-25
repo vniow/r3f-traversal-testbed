@@ -13,6 +13,11 @@ interface WoscopeRendererProps {
   sampleRate: number;
   audioElement?: HTMLAudioElement | null;
   analyserPull?: () => { left: Float32Array; right: Float32Array };
+  snapshot?: {
+    vertices: Float32Array;
+    indices: Uint16Array;
+    numSegments: number;
+  } | null;
   config?: Partial<WoscopeConfig>;
 }
 
@@ -25,6 +30,7 @@ export function WoscopeRenderer({
   sampleRate,
   audioElement,
   analyserPull,
+  snapshot,
   config = {},
 }: WoscopeRendererProps) {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -90,6 +96,44 @@ export function WoscopeRenderer({
       geometry.setIndex(new THREE.BufferAttribute(indexBufRef.current, 1));
     }
 
+    // If a frozen snapshot exists and playback is paused, render the snapshot and return
+    if (!isPlaying && typeof snapshot !== 'undefined' && snapshot !== null) {
+      if (snapshot.numSegments === 0) return;
+
+      const actualVertices = snapshot.vertices.length / 4;
+      const posBuf = positionsBufRef.current!;
+      const quadBuf = quadIndexBufRef.current!;
+      const segTBuf = segmentTBufRef.current!;
+      const idxBuf = indexBufRef.current!;
+
+      for (let i = 0; i < actualVertices; i++) {
+        const baseIndex = i * 4;
+        const posIndex = i * 3;
+        posBuf[posIndex] = snapshot.vertices[baseIndex];
+        posBuf[posIndex + 1] = snapshot.vertices[baseIndex + 1];
+        posBuf[posIndex + 2] = 0;
+        quadBuf[i] = snapshot.vertices[baseIndex + 2];
+        segTBuf[i] = snapshot.vertices[baseIndex + 3];
+      }
+
+      idxBuf.set(snapshot.indices.subarray(0, snapshot.indices.length));
+
+      const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const quadAttr = geometry.getAttribute('quadIndex') as THREE.BufferAttribute;
+      const segTAttr = geometry.getAttribute('segmentT') as THREE.BufferAttribute;
+      const idxAttr = geometry.index as THREE.BufferAttribute;
+
+      posAttr.needsUpdate = true;
+      quadAttr.needsUpdate = true;
+      segTAttr.needsUpdate = true;
+      idxAttr.needsUpdate = true;
+
+      geometry.setDrawRange(0, snapshot.indices.length);
+      // render snapshot at full intensity (do not dim on pause)
+      materialRef.current!.uniforms.uIntensity.value = 1.0;
+      return;
+    }
+
     // If an analyser pull is provided, prefer live analyser samples for visual fidelity
     if (analyserPull) {
       const { left: liveLeft, right: liveRight } = analyserPull();
@@ -129,7 +173,8 @@ export function WoscopeRenderer({
         idxAttr.needsUpdate = true;
 
         geometry.setDrawRange(0, vertexData.indices.length);
-        materialRef.current!.uniforms.uIntensity.value = isPlaying ? 1.0 : 0.5;
+        // Keep intensity at full brightness even when paused/snapshot so visuals don't dim
+        materialRef.current!.uniforms.uIntensity.value = 1.0;
         return;
       }
     }
